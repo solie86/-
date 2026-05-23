@@ -1100,8 +1100,8 @@ pages.myLeave = function () {
     ${myPending.length ? `
     <div class="card" style="margin-top:18px;">
       <h3>승인 대기 중인 신청 (${myPending.length}건)</h3>
-      <p style="font-size:12px; color:var(--gray-600); margin: 0 0 12px;">관리자 승인 전까지 직접 수정할 수 있습니다.</p>
-      ${renderRequestTable(myPending, { showEmp: false, showActions: false, showSelfEdit: true })}
+      <p style="font-size:12px; color:var(--gray-600); margin: 0 0 12px;">관리자 승인을 기다리고 있습니다. 수정이 필요하면 관리자에게 요청해 주세요.</p>
+      ${renderRequestTable(myPending, { showEmp: false, showActions: false, hideProcessed: true })}
     </div>` : ""}
 
     <div class="card" style="margin-top:18px;">
@@ -1113,11 +1113,6 @@ pages.myLeave = function () {
     </div>
   `;
   $("#goApply").addEventListener("click", () => navigate("apply"));
-
-  // 본인 대기 신청 수정 — 상태 변경 옵션 숨김
-  $$("button[data-self-edit]").forEach((btn) => {
-    btn.addEventListener("click", () => openEditRequestModal(btn.dataset.selfEdit, { hideStatus: true }));
-  });
 
   bindRequestRowClicks();
 };
@@ -2386,9 +2381,7 @@ function openRequestDetailModal(id) {
       <div style="flex:1;">${value}</div>
     </div>`;
 
-  // 본인 + 대기 중이면 수정 가능 (관리자는 표의 '관리' 칼럼에서 수정)
-  const u = currentUser();
-  const canSelfEdit = u && r.empNo === u.empNo && r.status === "pending";
+  // 신청자는 수정 불가. 관리자는 표의 '관리' 칼럼에서 수정.
   // 처리일/처리자는 오직 '연차 승인' 탭의 처리 완료 내역 표에서만 노출 (모달 포함 다른 곳은 숨김)
 
   $("#modalBody").innerHTML = `
@@ -2404,19 +2397,8 @@ function openRequestDetailModal(id) {
         <div style="background:var(--gray-50); padding:12px 14px; border-radius:8px; font-size:13.5px; line-height:1.6; white-space:pre-wrap; word-break:break-word;">${escapeHtml(reasonText)}</div>
       </div>
     </div>
-    ${canSelfEdit ? `
-    <div class="actions">
-      <button type="button" class="btn green" id="detailSelfEdit">수정하기</button>
-    </div>` : ""}
   `;
   $("#modalBackdrop").classList.add("active");
-
-  if (canSelfEdit) {
-    $("#detailSelfEdit").addEventListener("click", () => {
-      closeModal();
-      openEditRequestModal(id, { hideStatus: true });
-    });
-  }
 }
 
 function openEditRequestModal(id, opts) {
