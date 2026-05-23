@@ -237,8 +237,8 @@
   /* 근태 이벤트 (관리자만 표시) — 연차와 시각적으로 구분되도록 어두운 배색 */
   .cal-evt.att-late   { background: #ef6b6b; color: white; }
   .cal-evt.att-absent { background: var(--red-500); color: white; }
-  .cal-evt.att-sick   { background: var(--navy-500); color: white; }
-  .cal-evt.att-etc    { background: var(--gray-600); color: white; }
+  .cal-evt.att-sick   { background: #b39ddb; color: white; }
+  .cal-evt.att-etc    { background: var(--gray-400); color: white; }
   /* 관리자가 셀에 호버하면 클릭 가능한 느낌을 줌 */
   .cal-cell.clickable { cursor: pointer; }
   .cal-cell.clickable:hover { background: #f4f8ff; }
@@ -924,12 +924,11 @@ pages.home = function () {
       <div class="cal-legend">
         <span><i style="background:var(--green-500);"></i>연차</span>
         <span><i style="background:var(--yellow-500);"></i>반차</span>
-        <span><i style="background:var(--gray-400);"></i>승인 대기</span>
         ${u.role === "admin" ? `
           <span><i style="background:#ef6b6b;"></i>지각</span>
           <span><i style="background:var(--red-500);"></i>결근</span>
-          <span><i style="background:var(--navy-500);"></i>병가</span>
-          <span><i style="background:var(--gray-600);"></i>기타</span>
+          <span><i style="background:#b39ddb;"></i>병가</span>
+          <span><i style="background:var(--gray-400);"></i>기타</span>
         ` : ""}
       </div>
     </div>
@@ -976,9 +975,9 @@ function renderMonthCalendar() {
   // - 근태기록(지각/결근/병가/기타)은 관리자에게만 표시 (개인정보)
   const eventsByDate = {};
 
-  // 연차 신청 (전 직원에게 공개)
+  // 연차 신청 — 승인된 것만 (대기 중인 것은 달력에 노출하지 않음)
   Store.getRequests()
-    .filter(r => r.status === "pending" || r.status === "approved")
+    .filter(r => r.status === "approved")
     .forEach(r => {
       const s = parseLocalDate(r.startDate);
       const e = parseLocalDate(r.endDate);
@@ -1042,10 +1041,7 @@ function renderMonthCalendar() {
         const emp = Store.getEmployee(r.empNo);
         const name = emp ? emp.name : r.empNo;
         let label, cls;
-        if (r.status === "pending") {
-          label = `[대기]${name}`;
-          cls = "pending";
-        } else if (r.days === 0.5) {
+        if (r.days === 0.5) {
           const part = r.halfDayPart === "AM" ? "오전반차" : "오후반차";
           label = `[${part}]${name}`;
           cls = "approved-half";
@@ -1725,17 +1721,17 @@ function openQuickAttendanceModal(dateStr) {
           <label>직원 *</label>
           <select id="qaEmp" required>
             <option value="">-- 선택 --</option>
-            ${employees.map(e => `<option value="${escapeHtml(e.empNo)}">${escapeHtml(e.name)}${e.position ? " (" + escapeHtml(e.position) + ")" : ""}</option>`).join("")}
+            ${employees.map(e => `<option value="${escapeHtml(e.empNo)}">${escapeHtml(e.name)}</option>`).join("")}
           </select>
         </div>
       </div>
       <div class="form-group">
         <label>유형 *</label>
-        <div style="display:flex; gap:18px; flex-wrap:wrap; padding:6px 0 2px;">
-          <label style="display:flex; align-items:center; gap:5px; font-weight:500; cursor:pointer; font-size:13.5px;"><input type="radio" name="qaType" value="late" checked /> 지각</label>
-          <label style="display:flex; align-items:center; gap:5px; font-weight:500; cursor:pointer; font-size:13.5px;"><input type="radio" name="qaType" value="absent" /> 결근</label>
-          <label style="display:flex; align-items:center; gap:5px; font-weight:500; cursor:pointer; font-size:13.5px;"><input type="radio" name="qaType" value="sick" /> 병가</label>
-          <label style="display:flex; align-items:center; gap:5px; font-weight:500; cursor:pointer; font-size:13.5px;"><input type="radio" name="qaType" value="etc" /> 기타</label>
+        <div style="display:flex; gap:20px; flex-wrap:wrap; padding:6px 0 2px;">
+          <label style="display:inline-flex; align-items:center; gap:6px; font-weight:500; cursor:pointer; font-size:14px; white-space:nowrap;"><input type="radio" name="qaType" value="late" checked style="margin:0;" /> 지각</label>
+          <label style="display:inline-flex; align-items:center; gap:6px; font-weight:500; cursor:pointer; font-size:14px; white-space:nowrap;"><input type="radio" name="qaType" value="absent" style="margin:0;" /> 결근</label>
+          <label style="display:inline-flex; align-items:center; gap:6px; font-weight:500; cursor:pointer; font-size:14px; white-space:nowrap;"><input type="radio" name="qaType" value="sick" style="margin:0;" /> 병가</label>
+          <label style="display:inline-flex; align-items:center; gap:6px; font-weight:500; cursor:pointer; font-size:14px; white-space:nowrap;"><input type="radio" name="qaType" value="etc" style="margin:0;" /> 기타</label>
         </div>
       </div>
       <div class="form-row cols-1">
