@@ -234,6 +234,15 @@
   .cal-evt.pending { background: var(--gray-400); }
   .cal-evt.approved { background: var(--green-500); }
   .cal-evt.approved-half { background: var(--yellow-500); color: #5a4710; }
+  /* 근태 이벤트 (관리자만 표시) — 연차와 시각적으로 구분되도록 어두운 배색 */
+  .cal-evt.att-late   { background: #ef6b6b; color: white; }
+  .cal-evt.att-absent { background: var(--red-500); color: white; }
+  .cal-evt.att-sick   { background: var(--navy-500); color: white; }
+  .cal-evt.att-etc    { background: var(--gray-600); color: white; }
+  /* 관리자가 셀에 호버하면 클릭 가능한 느낌을 줌 */
+  .cal-cell.clickable { cursor: pointer; }
+  .cal-cell.clickable:hover { background: #f4f8ff; }
+  .cal-cell.clickable.other-month:hover { background: #f0f4fb; }
   .cal-legend { display: flex; gap: 14px; font-size: 11px; color: var(--gray-600); margin-top: 10px; flex-wrap: wrap; }
   .cal-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .cal-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
@@ -905,6 +914,7 @@ pages.home = function () {
       <div class="cal-toolbar">
         <div class="title" id="calTitle"></div>
         <div class="nav-btns">
+          ${u.role === "admin" ? `<button class="btn green sm" id="calAddAtt">+ 근태 기록</button>` : ""}
           <button class="btn ghost sm" id="calToday">오늘</button>
           <button class="btn ghost sm" id="calPrev">◀</button>
           <button class="btn ghost sm" id="calNext">▶</button>
@@ -915,6 +925,12 @@ pages.home = function () {
         <span><i style="background:var(--green-500);"></i>연차</span>
         <span><i style="background:var(--yellow-500);"></i>반차</span>
         <span><i style="background:var(--gray-400);"></i>승인 대기</span>
+        ${u.role === "admin" ? `
+          <span><i style="background:#ef6b6b;"></i>지각</span>
+          <span><i style="background:var(--red-500);"></i>결근</span>
+          <span><i style="background:var(--navy-500);"></i>병가</span>
+          <span><i style="background:var(--gray-600);"></i>기타</span>
+        ` : ""}
       </div>
     </div>
 
@@ -940,6 +956,9 @@ pages.home = function () {
     _calMonth = new Date(today().getFullYear(), today().getMonth(), 1);
     renderMonthCalendar();
   });
+  if (u.role === "admin") {
+    $("#calAddAtt").addEventListener("click", () => openQuickAttendanceModal());
+  }
 };
 
 function renderMonthCalendar() {
@@ -949,10 +968,15 @@ function renderMonthCalendar() {
   const firstWeekday = firstDay.getDay(); // 0=일
   const startDate = new Date(year, month, 1 - firstWeekday);
   const todayStr = fmtDate(today());
+  const cu = currentUser();
+  const isAdmin = cu && cu.role === "admin";
 
-  // 날짜별 일정 매핑 (반려는 제외)
-  // parseLocalDate 사용 — 시간대 변환으로 인한 -1일 밀림 방지
+  // 날짜별 이벤트 매핑
+  // - 연차/반차/대기는 전 직원에게 표시 (모든 사용자가 봄)
+  // - 근태기록(지각/결근/병가/기타)은 관리자에게만 표시 (개인정보)
   const eventsByDate = {};
+
+  // 연차 신청 (전 직원에게 공개)
   Store.getRequests()
     .filter(r => r.status === "pending" || r.status === "approved")
     .forEach(r => {
@@ -962,10 +986,19 @@ function renderMonthCalendar() {
       while (d <= e) {
         const k = fmtDate(d);
         if (!eventsByDate[k]) eventsByDate[k] = [];
-        eventsByDate[k].push(r);
+        eventsByDate[k].push({ kind: "leave", data: r });
         d.setDate(d.getDate() + 1);
       }
     });
+
+  // 근태 기록 (관리자에게만 공개)
+  if (isAdmin) {
+    Store._cache.attendance.forEach(a => {
+      const k = a.recordDate;
+      if (!eventsByDate[k]) eventsByDate[k] = [];
+      eventsByDate[k].push({ kind: "attendance", data: a });
+    });
+  }
 
   $("#calTitle").textContent = `${year}년 ${month + 1}월`;
 
@@ -993,33 +1026,60 @@ function renderMonthCalendar() {
     if (isToday) classes.push("today");
     if (wd === 0) classes.push("sun");
     if (wd === 6) classes.push("sat");
+    if (isAdmin) classes.push("clickable");
 
     const k = fmtDate(d);
-    const evts = (eventsByDate[k] || []).slice().sort((a,b) => a.empNo.localeCompare(b.empNo));
-
-    let evtHtml = "";
-    evts.forEach(r => {
-      const emp = Store.getEmployee(r.empNo);
-      const name = emp ? emp.name : r.empNo;
-      let label, cls;
-      if (r.status === "pending") {
-        label = `[대기]${name}`;
-        cls = "pending";
-      } else if (r.days === 0.5) {
-        const part = r.halfDayPart === "AM" ? "오전반차" : "오후반차";
-        label = `[${part}]${name}`;
-        cls = "approved-half";
-      } else {
-        label = `[연차]${name}`;
-        cls = "approved";
-      }
-      evtHtml += `<span class="cal-evt ${cls}" title="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
+    // 연차 먼저, 근태 다음, 같은 종류 내에선 이름순
+    const evts = (eventsByDate[k] || []).slice().sort((x, y) => {
+      if (x.kind !== y.kind) return x.kind === "leave" ? -1 : 1;
+      return x.data.empNo.localeCompare(y.data.empNo);
     });
 
-    html += `<div class="${classes.join(" ")}"><div class="day">${d.getDate()}</div>${evtHtml}</div>`;
+    let evtHtml = "";
+    evts.forEach(item => {
+      if (item.kind === "leave") {
+        const r = item.data;
+        const emp = Store.getEmployee(r.empNo);
+        const name = emp ? emp.name : r.empNo;
+        let label, cls;
+        if (r.status === "pending") {
+          label = `[대기]${name}`;
+          cls = "pending";
+        } else if (r.days === 0.5) {
+          const part = r.halfDayPart === "AM" ? "오전반차" : "오후반차";
+          label = `[${part}]${name}`;
+          cls = "approved-half";
+        } else {
+          label = `[연차]${name}`;
+          cls = "approved";
+        }
+        evtHtml += `<span class="cal-evt ${cls}" title="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
+      } else {
+        const a = item.data;
+        const emp = Store.getEmployee(a.empNo);
+        const name = emp ? emp.name : a.empNo;
+        const typeLabel = attTypeLabel(a.recordType);
+        const cls = "att-" + a.recordType;
+        const label = `[${typeLabel}]${name}`;
+        const tooltip = label + (a.note ? " — " + a.note : "");
+        evtHtml += `<span class="cal-evt ${cls}" title="${escapeHtml(tooltip)}">${escapeHtml(label)}</span>`;
+      }
+    });
+
+    html += `<div class="${classes.join(" ")}" data-date="${k}"><div class="day">${d.getDate()}</div>${evtHtml}</div>`;
   }
   html += `</div>`;
   $("#calGrid").innerHTML = html;
+
+  // 관리자 — 셀 클릭 시 그 날짜로 근태 기록 모달 오픈
+  if (isAdmin) {
+    $$("#calGrid .cal-cell").forEach(cell => {
+      cell.addEventListener("click", (e) => {
+        // 이벤트 막대(.cal-evt) 클릭은 무시하고 빈 영역만 등록 흐름 (단, 클릭하면 그 날짜로 모달 오픈)
+        openQuickAttendanceModal(cell.dataset.date);
+      });
+    });
+  }
 }
 
 /* ------------------ 9. 페이지: 내 연차 ------------------ */
@@ -1643,6 +1703,94 @@ function closeModal() {
   // 와이드 모드 해제
   const m = $("#modalBackdrop .modal");
   if (m) m.classList.remove("wide");
+}
+
+/* ------------------ 빠른 근태 기록 모달 (관리자 전용, 달력에서 사용) ------------------ */
+function openQuickAttendanceModal(dateStr) {
+  const cu = currentUser();
+  if (!cu || cu.role !== "admin") return;
+
+  const employees = Store.getEmployees().slice().sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  const date = dateStr || fmtDate(today());
+
+  $("#modalBody").innerHTML = `
+    <h3>+ 근태 기록</h3>
+    <form id="quickAttForm">
+      <div class="form-row">
+        <div class="form-group">
+          <label>날짜 *</label>
+          <input type="date" id="qaDate" required value="${date}" />
+        </div>
+        <div class="form-group">
+          <label>직원 *</label>
+          <select id="qaEmp" required>
+            <option value="">-- 선택 --</option>
+            ${employees.map(e => `<option value="${escapeHtml(e.empNo)}">${escapeHtml(e.name)}${e.position ? " (" + escapeHtml(e.position) + ")" : ""}</option>`).join("")}
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>유형 *</label>
+        <div style="display:flex; gap:18px; flex-wrap:wrap; padding:6px 0 2px;">
+          <label style="display:flex; align-items:center; gap:5px; font-weight:500; cursor:pointer; font-size:13.5px;"><input type="radio" name="qaType" value="late" checked /> 지각</label>
+          <label style="display:flex; align-items:center; gap:5px; font-weight:500; cursor:pointer; font-size:13.5px;"><input type="radio" name="qaType" value="absent" /> 결근</label>
+          <label style="display:flex; align-items:center; gap:5px; font-weight:500; cursor:pointer; font-size:13.5px;"><input type="radio" name="qaType" value="sick" /> 병가</label>
+          <label style="display:flex; align-items:center; gap:5px; font-weight:500; cursor:pointer; font-size:13.5px;"><input type="radio" name="qaType" value="etc" /> 기타</label>
+        </div>
+      </div>
+      <div class="form-row cols-1">
+        <div class="form-group">
+          <label>비고 <span id="qaNoteReq" style="color:var(--red-500); display:none;">*</span></label>
+          <input type="text" id="qaNote" placeholder="예: 30분 지각, 사전 연락 없음" />
+          <div class="hint" id="qaNoteHint" style="display:none;">기타 유형은 비고가 필수입니다.</div>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn ghost" id="qaCancel">취소</button>
+        <button type="submit" class="btn green" id="qaSave">저장</button>
+      </div>
+    </form>
+  `;
+  $("#modalBackdrop").classList.add("active");
+  $("#qaCancel").addEventListener("click", closeModal);
+
+  // 유형이 '기타'면 비고 필수 표시 ON
+  $$("input[name='qaType']").forEach(radio => {
+    radio.addEventListener("change", () => {
+      const selected = $$("input[name='qaType']").find(r => r.checked).value;
+      const isEtc = selected === "etc";
+      $("#qaNoteReq").style.display = isEtc ? "" : "none";
+      $("#qaNoteHint").style.display = isEtc ? "" : "none";
+    });
+  });
+
+  $("#quickAttForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#qaSave");
+    const empNo = $("#qaEmp").value;
+    const recordType = $$("input[name='qaType']").find(r => r.checked).value;
+    const note = $("#qaNote").value.trim();
+
+    if (!empNo) { alert("직원을 선택해 주세요."); return; }
+    if (recordType === "etc" && !note) {
+      alert("기타 유형은 비고를 반드시 입력해 주세요.");
+      return;
+    }
+    btn.disabled = true;
+    try {
+      await Store.addAttendance({
+        empNo,
+        recordDate: $("#qaDate").value,
+        recordType,
+        note: note || null,
+      });
+      closeModal();
+      navigate("home"); // 달력 새로 그리기
+    } catch (err) {
+      alert("저장 실패: " + (err.message || err));
+      btn.disabled = false;
+    }
+  });
 }
 
 /* ------------------ 직원 상세 모달 (탭: 기본정보 / 근태기록 / 면담일지) ------------------ */
