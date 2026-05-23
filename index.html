@@ -2623,7 +2623,7 @@ function renderRequestTable(reqs, opts) {
       <th>기간</th><th>일수</th><th>상태</th>
       ${showActions ? "<th style=''>처리</th>"
         : showSelfEdit ? "<th style=''>관리</th>"
-        : showEdit ? "<th>처리일</th><th style=''>관리</th>"
+        : showEdit ? "<th>처리일</th><th>처리자</th><th style=''>관리</th>"
         : "<th>처리일</th>"}
     </tr></thead>
     <tbody>
@@ -2651,7 +2651,10 @@ function renderRequestTable(reqs, opts) {
              </span>
            </td>`;
       } else if (showEdit) {
+        const approver = r.approverEmpNo ? Store.getEmployee(r.approverEmpNo) : null;
+        const approverName = approver ? approver.name : (r.approverEmpNo || "-");
         lastCol = `<td>${r.processedAt ? fmtDate(r.processedAt) : "-"}</td>
+           <td>${escapeHtml(approverName)}</td>
            <td style="">
              <span class="actions-cell">
                <button class="btn ghost xs" data-edit-req="${r.id}">수정</button>
