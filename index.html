@@ -400,6 +400,30 @@ const SUPABASE_URL = "https://ndfboobqkgdkieitskgo.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kZmJvb2Jxa2dka2llaXRza2dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0NjgyNjEsImV4cCI6MjA5NTA0NDI2MX0.LV4ZVD5Re-_A9uA3hioWPdIDGGitkJmKkwlRVvmm250";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+/* ------------------ 0-1. 텔레그램 알림 설정 ------------------
+   * 신청 등록 시 관리자 텔레그램으로 알림 전송
+   * 추후 관리자 여러 명에게 보내려면 TELEGRAM_ADMIN_CHAT_IDS 배열에 추가
+   * 토큰이 노출되어도 본 봇은 메시지 전송 권한만 있어 위험도는 낮음
+   ----------------------------------------------------------- */
+const TELEGRAM_BOT_TOKEN = "8943983356:AAHH5fJdbSX0ZD2Fk5d7I9fms_oYoDm6pcA";
+const TELEGRAM_ADMIN_CHAT_IDS = ["8808458319"]; // Solie Park
+
+async function notifyTelegram(text) {
+  if (!TELEGRAM_BOT_TOKEN || TELEGRAM_ADMIN_CHAT_IDS.length === 0) return;
+  for (const chatId of TELEGRAM_ADMIN_CHAT_IDS) {
+    try {
+      await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML", disable_web_page_preview: true }),
+      });
+    } catch (e) {
+      // 알림 실패는 무시 (신청 등록은 정상 진행)
+      console.warn("Telegram notify failed:", e);
+    }
+  }
+}
+
 /* ------------------ 1. 유틸 ------------------ */
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -536,6 +560,26 @@ const Store = {
     const { error } = await sb.from("leave_requests").insert(row);
     if (error) throw error;
     await this.refresh();
+
+    // 텔레그램 알림 (실패해도 신청은 등록 완료)
+    const emp = this.getEmployee(req.empNo);
+    const empName = emp ? emp.name : req.empNo;
+    let unit;
+    if (req.days === 0.5) {
+      unit = `반차 (${req.halfDayPart === "AM" ? "오전" : "오후"})`;
+    } else {
+      unit = `연차 (${req.days}일)`;
+    }
+    const dateRange = req.startDate === req.endDate ? req.startDate : `${req.startDate} ~ ${req.endDate}`;
+    const msg =
+      `🎫 <b>새 연차 신청</b>\n\n` +
+      `👤 ${empName}\n` +
+      `📅 ${dateRange}\n` +
+      `⏱ ${unit}\n` +
+      (req.reason ? `📝 ${req.reason}\n` : ``) +
+      `\n관리자 페이지에서 승인/반려해주세요.\n` +
+      `https://hrcompany-leave.vercel.app`;
+    notifyTelegram(msg);
   },
   async updateRequest(id, patch) {
     const row = {};
