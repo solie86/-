@@ -275,6 +275,7 @@
   .badge.att-late   { background: #fcf3d5; color: #8a6a14; }
   .badge.att-absent { background: #fbe4e4; color: #a73838; }
   .badge.att-sick   { background: #e3edff; color: var(--navy-700); }
+  .badge.att-etc    { background: var(--gray-100); color: var(--gray-600); }
 </style>
 </head>
 <body>
@@ -1673,10 +1674,10 @@ function renderEmployeeInfoTab(empNo) {
 }
 
 function attTypeLabel(t) {
-  return t === "late" ? "지각" : t === "absent" ? "무단결근" : t === "sick" ? "병가" : t;
+  return t === "late" ? "지각" : t === "absent" ? "무단결근" : t === "sick" ? "병가" : t === "etc" ? "기타" : t;
 }
 function attTypeBadge(t) {
-  const cls = t === "late" ? "att-late" : t === "absent" ? "att-absent" : "att-sick";
+  const cls = t === "late" ? "att-late" : t === "absent" ? "att-absent" : t === "sick" ? "att-sick" : "att-etc";
   return `<span class="badge ${cls}">${attTypeLabel(t)}</span>`;
 }
 
@@ -1736,6 +1737,7 @@ function renderAttendanceTab(empNo) {
               <option value="late">지각</option>
               <option value="absent">무단결근</option>
               <option value="sick">병가</option>
+              <option value="etc">기타</option>
             </select>
           </div>
           <div class="form-group" style="display:flex; align-items:flex-end;">
@@ -1744,8 +1746,9 @@ function renderAttendanceTab(empNo) {
         </div>
         <div class="form-row cols-1">
           <div class="form-group">
-            <label>비고</label>
+            <label>비고 <span id="attNoteReq" style="color:var(--red-500); display:none;">*</span></label>
             <input type="text" id="attNote" placeholder="예: 30분 지각, 사전 연락 없음" />
+            <div class="hint" id="attNoteHint" style="display:none;">기타 유형은 비고가 필수입니다.</div>
           </div>
         </div>
       </form>
@@ -1778,16 +1781,30 @@ function renderAttendanceTab(empNo) {
     // 잔여 조정 단축 버튼
     $("#detailAdjust").addEventListener("click", () => { closeModal(); openAdjustBalanceModal(empNo); });
 
+    // 유형이 '기타'면 비고 필수 표시 ON
+    const updateNoteRequiredUi = () => {
+      const isEtc = $("#attType").value === "etc";
+      $("#attNoteReq").style.display = isEtc ? "" : "none";
+      $("#attNoteHint").style.display = isEtc ? "" : "none";
+    };
+    $("#attType").addEventListener("change", updateNoteRequiredUi);
+
     $("#addAttForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const btn = $("#saveAtt");
+      const note = $("#attNote").value.trim();
+      const recordType = $("#attType").value;
+      if (recordType === "etc" && !note) {
+        alert("기타 유형은 비고를 반드시 입력해 주세요.");
+        return;
+      }
       btn.disabled = true;
       try {
         await Store.addAttendance({
           empNo,
           recordDate: $("#attDate").value,
-          recordType: $("#attType").value,
-          note: $("#attNote").value.trim() || null,
+          recordType,
+          note: note || null,
         });
         // 탭만 다시 그리기 (모달은 유지)
         renderAttendanceTab(empNo);
