@@ -2428,12 +2428,14 @@ $("#signupInfoForm").addEventListener("submit", async (e) => {
   try {
     if (!_signupMatchedEmp) throw new Error("매칭 정보가 없습니다. 다시 시도해 주세요.");
     const newU = $("#suUsername").value.trim();
-    const email = $("#suEmail").value.trim() || null;
+    const email = $("#suEmail").value.trim();
     const phone = formatPhoneNumber($("#suPhone").value);
     const pw = $("#suPw").value;
     const pw2 = $("#suPw2").value;
 
     if (!newU) throw new Error("아이디를 입력해 주세요.");
+    if (!email) throw new Error("이메일을 입력해 주세요.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("이메일 형식이 올바르지 않습니다.");
     if (!isValidPhone(phone)) throw new Error("휴대전화는 000-0000-0000 형태로 입력해 주세요.");
     if (pw.length < 4) throw new Error("비밀번호는 최소 4자 이상이어야 합니다.");
     if (pw !== pw2) throw new Error("비밀번호 확인이 일치하지 않습니다.");
