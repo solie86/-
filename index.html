@@ -214,25 +214,25 @@
   }
   .cal-head, .cal-cell { background: white; }
   .cal-head {
-    text-align: center; font-size: 11px; font-weight: 700; color: var(--gray-600);
-    background: var(--gray-50); padding: 8px 6px;
+    text-align: center; font-size: 13px; font-weight: 700; color: var(--gray-600);
+    background: var(--gray-50); padding: 10px 6px;
   }
   .cal-head.sun, .cal-head.sat { color: var(--red-500); }
-  .cal-cell { padding: 6px 6px 8px; min-height: 130px; }
-  .cal-cell .day { font-size: 11px; color: var(--gray-600); margin-bottom: 4px; }
+  .cal-cell { padding: 8px 8px 10px; min-height: 130px; }
+  .cal-cell .day { font-size: 13px; color: var(--gray-600); margin-bottom: 6px; }
   .cal-cell.other-month { background: #fafbfd; }
   .cal-cell.other-month .day { color: var(--gray-400); }
   .cal-cell.today .day { color: var(--navy-700); font-weight: 700; }
   .cal-cell.today { background: #f4f8ff; }
   .cal-cell.sun .day, .cal-cell.sat .day { color: var(--red-500); }
   .cal-evt {
-    display: block; font-size: 10.5px;
-    padding: 2px 6px; border-radius: 3px; margin-bottom: 2px;
+    display: block; font-size: 12.5px;
+    padding: 3px 7px; border-radius: 3px; margin-bottom: 3px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     color: white; font-weight: 600;
   }
   .cal-evt.pending { background: transparent; color: var(--gray-800); padding-left: 2px; }
-  .cal-evt.pending::before { content: "●"; color: #5b8def; margin-right: 2px; font-size: 10px; }
+  .cal-evt.pending::before { content: "●"; color: #5b8def; margin-right: 2px; font-size: 12px; }
   .cal-evt.approved { background: var(--green-500); }
   .cal-evt.approved-half { background: var(--yellow-500); color: #5a4710; }
   /* 근태 이벤트 (관리자만 표시) — 연차와 시각적으로 구분되도록 어두운 배색 */
@@ -248,8 +248,10 @@
   .cal-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .cal-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
   @media (max-width: 768px) {
-    .cal-cell { min-height: 85px; padding: 4px; }
-    .cal-evt { font-size: 9px; padding: 1px 4px; }
+    .cal-cell { min-height: 85px; padding: 5px; }
+    .cal-evt { font-size: 11px; padding: 2px 5px; }
+    .cal-cell .day { font-size: 12px; }
+    .cal-head { font-size: 12px; padding: 8px 4px; }
   }
 
   .modal-backdrop { position: fixed; inset: 0; background: rgba(15,31,61,0.45); display: none; align-items: center; justify-content: center; z-index: 100; padding: 18px; }
@@ -1817,24 +1819,27 @@ function renderDayAttendanceModal(dateStr) {
   const wdNames = ["일","월","화","수","목","금","토"];
   const wd = wdNames[d.getDay()];
 
-  $("#modalBody").innerHTML = `
-    <h3>${dateStr} (${wd}) 일정</h3>
-
+  const leavesHtml = leaves.length === 0 ? "" : `
     <div style="margin-bottom:18px;">
       <div style="font-size:12px; color:var(--gray-600); font-weight:600; margin-bottom:8px;">연차 · 반차 (${leaves.length}건)</div>
-      ${leaves.length === 0
-        ? `<div class="empty" style="padding:14px; background:var(--gray-50); border-radius:8px; font-size:13px;">연차/반차 신청이 없습니다.</div>`
-        : `<div style="border:1px solid var(--gray-200); border-radius:8px; overflow:hidden;">${leaves.map(r => renderLeaveRowHtml(r)).join("")}</div>`}
-    </div>
+      <div style="border:1px solid var(--gray-200); border-radius:8px; overflow:hidden;">${leaves.map(r => renderLeaveRowHtml(r)).join("")}</div>
+    </div>`;
 
+  const recordsHtml = records.length === 0 ? "" : `
     <div style="margin-bottom:18px;">
       <div style="font-size:12px; color:var(--gray-600); font-weight:600; margin-bottom:8px;">근태 기록 (${records.length}건)</div>
-      ${records.length === 0
-        ? `<div class="empty" style="padding:14px; background:var(--gray-50); border-radius:8px; font-size:13px;">근태 기록이 없습니다.</div>`
-        : `<div style="border:1px solid var(--gray-200); border-radius:8px; overflow:hidden;">${records.map(r => renderAttRowHtml(r, employees)).join("")}</div>`}
-    </div>
+      <div style="border:1px solid var(--gray-200); border-radius:8px; overflow:hidden;">${records.map(r => renderAttRowHtml(r, employees)).join("")}</div>
+    </div>`;
 
-    <div style="border-top:1px solid var(--gray-200); padding-top:18px;">
+  // 위 섹션이 하나라도 있으면 추가 폼 위에 구분선
+  const addFormStyle = (leaves.length || records.length) ? "border-top:1px solid var(--gray-200); padding-top:18px;" : "";
+
+  $("#modalBody").innerHTML = `
+    <h3>${dateStr} (${wd}) 일정</h3>
+    ${leavesHtml}
+    ${recordsHtml}
+
+    <div style="${addFormStyle}">
       <div style="font-weight:600; font-size:13px; margin-bottom:10px;">+ 새 근태 기록 추가</div>
       <form id="dayAttAddForm">
         <div class="form-row">
@@ -2382,6 +2387,7 @@ function openRequestDetailModal(id) {
   // 본인 + 대기 중이면 수정 가능 (관리자는 표의 '관리' 칼럼에서 수정)
   const u = currentUser();
   const canSelfEdit = u && r.empNo === u.empNo && r.status === "pending";
+  const isAdmin = u && u.role === "admin";
 
   $("#modalBody").innerHTML = `
     <h3>신청 상세 정보</h3>
@@ -2391,8 +2397,8 @@ function openRequestDetailModal(id) {
       ${row("일수", `${r.days}일`)}
       ${row("상태", `<span style="color:${stateColor}; font-weight:700;">${stateText}</span>`)}
       ${row("신청일", fmtDate(r.requestedAt))}
-      ${row("처리일", r.processedAt ? fmtDate(r.processedAt) : "-")}
-      ${row("처리자", approver ? escapeHtml(approver.name) : "-")}
+      ${isAdmin ? row("처리일", r.processedAt ? fmtDate(r.processedAt) : "-") : ""}
+      ${isAdmin ? row("처리자", approver ? escapeHtml(approver.name) : "-") : ""}
       <div style="padding:10px 0 0;">
         <div style="color:var(--gray-600); font-weight:600; font-size:13.5px; margin-bottom:6px;">사유</div>
         <div style="background:var(--gray-50); padding:12px 14px; border-radius:8px; font-size:13.5px; line-height:1.6; white-space:pre-wrap; word-break:break-word;">${escapeHtml(reasonText)}</div>
