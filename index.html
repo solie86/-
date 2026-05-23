@@ -501,6 +501,13 @@ const Store = {
     await this.refresh();
   },
 
+  // 직원 삭제 (관련 신청 내역도 함께 삭제됨 — ON DELETE CASCADE)
+  async deleteEmployee(username) {
+    const { error } = await sb.from("employees").delete().eq("username", username);
+    if (error) throw error;
+    await this.refresh();
+  },
+
   async addRequest(req) {
     const row = {
       username: req.empNo,
@@ -1067,6 +1074,7 @@ pages.employees = function () {
                 <button class="btn ghost xs" data-edit="${escapeHtml(e.empNo)}">수정</button>
                 <button class="btn ghost xs" data-adjust="${escapeHtml(e.empNo)}">잔여조정</button>
                 <button class="btn ghost xs" data-reset="${escapeHtml(e.empNo)}">비번리셋</button>
+                <button class="btn ghost xs" style="color:var(--red-500);" data-delete="${escapeHtml(e.empNo)}">삭제</button>
               </td>
             </tr>`;
           }).join("")}
@@ -1084,7 +1092,66 @@ pages.employees = function () {
   $$("button[data-adjust]").forEach((btn) => {
     btn.addEventListener("click", () => openAdjustBalanceModal(btn.dataset.adjust));
   });
+  $$("button[data-delete]").forEach((btn) => {
+    btn.addEventListener("click", () => openDeleteEmployeeModal(btn.dataset.delete));
+  });
 };
+
+function openDeleteEmployeeModal(empNo) {
+  const emp = Store.getEmployee(empNo);
+  if (!emp) return alert("직원 정보를 찾을 수 없습니다.");
+  const cur = currentUser();
+  if (cur.empNo === emp.empNo) {
+    return alert("본인 계정은 삭제할 수 없습니다. 다른 관리자에게 요청하세요.");
+  }
+  const adminCount = Store.getEmployees().filter(e => e.role === "admin").length;
+  if (emp.role === "admin" && adminCount <= 1) {
+    return alert("관리자가 한 명뿐입니다. 마지막 관리자는 삭제할 수 없습니다.");
+  }
+
+  const reqCount = Store.getRequests().filter(r => r.empNo === empNo).length;
+
+  $("#modalBody").innerHTML = `
+    <h3 style="color:var(--red-500);">⚠ 직원 삭제 — ${escapeHtml(emp.name)}</h3>
+    <p style="font-size:13px; color:var(--gray-600); line-height:1.6; margin: 0 0 12px;">
+      <strong>${escapeHtml(emp.name)}</strong> 직원의 계정과 함께
+      이 직원의 연차 신청 내역 <strong>${reqCount}건</strong>이 모두 영구 삭제됩니다.
+      이 작업은 되돌릴 수 없습니다.
+    </p>
+    <p style="font-size:13px; color:var(--gray-600); margin: 0 0 6px;">
+      확인을 위해 아래에 직원 이름을 그대로 입력해 주세요.
+    </p>
+    <form id="delForm">
+      <div class="form-group">
+        <input id="delConfirm" placeholder="${escapeHtml(emp.name)}" autocomplete="off" />
+      </div>
+      <div class="actions">
+        <button type="button" class="btn ghost" id="closeModal">취소</button>
+        <button type="submit" class="btn danger" id="saveDel">영구 삭제</button>
+      </div>
+    </form>
+  `;
+  $("#modalBackdrop").classList.add("active");
+  $("#closeModal").addEventListener("click", closeModal);
+
+  $("#delForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#saveDel");
+    btn.disabled = true;
+    try {
+      if ($("#delConfirm").value.trim() !== emp.name) {
+        throw new Error("입력한 이름이 직원 이름과 일치하지 않습니다.");
+      }
+      await Store.deleteEmployee(emp.empNo);
+      closeModal();
+      alert(`${emp.name} 직원이 삭제되었습니다.`);
+      navigate("employees");
+    } catch (err) {
+      alert("삭제 실패: " + (err.message || err));
+      btn.disabled = false;
+    }
+  });
+}
 
 function openAdjustBalanceModal(empNo) {
   const emp = Store.getEmployee(empNo);
