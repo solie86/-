@@ -771,6 +771,12 @@ function renderMonthCalendar() {
 
   $("#calTitle").textContent = `${year}년 ${month + 1}월`;
 
+  // 그 달이 차지하는 주 수 계산 (4·5·6주)
+  const lastDayNum = new Date(year, month + 1, 0).getDate();
+  const totalSlots = firstWeekday + lastDayNum;
+  const numWeeks = Math.ceil(totalSlots / 7);
+  const totalCells = numWeeks * 7;
+
   const dayHeads = ["일","월","화","수","목","금","토"];
   let html = `<div class="cal-grid">`;
   dayHeads.forEach((h, i) => {
@@ -778,7 +784,7 @@ function renderMonthCalendar() {
     html += `<div class="cal-head ${cls}">${h}</div>`;
   });
 
-  for (let i = 0; i < 42; i++) {
+  for (let i = 0; i < totalCells; i++) {
     const d = new Date(startDate);
     d.setDate(startDate.getDate() + i);
     const isOther = d.getMonth() !== month;
