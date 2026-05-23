@@ -1602,8 +1602,8 @@ function renderRequestTable(reqs, opts) {
         ? `${r.startDate} (${r.halfDayPart === "AM" ? "오전" : "오후"} 반차)`
         : (r.startDate === r.endDate ? r.startDate : `${r.startDate} ~ ${r.endDate}`);
       let badge = "";
-      if (r.status === "pending") badge = `<span class="badge pending">대기 중</span>`;
-      else if (r.status === "approved" && r.days === 0.5) badge = `<span class="badge approved-half">반차 승인</span>`;
+      if (r.status === "pending") badge = `<span class="badge pending">대기</span>`;
+      else if (r.status === "approved" && r.days === 0.5) badge = `<span class="badge approved-half">승인</span>`;
       else if (r.status === "approved") badge = `<span class="badge approved">승인</span>`;
       else if (r.status === "rejected") badge = `<span class="badge rejected">반려</span>`;
 
@@ -1627,13 +1627,15 @@ function renderRequestTable(reqs, opts) {
         lastCol = `<td>${r.processedAt ? fmtDate(r.processedAt) : "-"}</td>`;
       }
 
+      // 사유: '기존 데이터 이관' 노이즈는 화면에서 숨김
+      const reasonText = (r.reason && r.reason !== "기존 데이터 이관") ? r.reason : "-";
       return `<tr>
         <td style="white-space:nowrap;">${fmtDate(r.requestedAt)}</td>
-        ${showEmp ? `<td style="font-weight:600;">${emp ? escapeHtml(emp.name) : escapeHtml(r.empNo)}</td>` : ""}
+        ${showEmp ? `<td style="font-weight:600; white-space:nowrap;">${emp ? escapeHtml(emp.name) : escapeHtml(r.empNo)}</td>` : ""}
         <td style="white-space:nowrap;">${range}</td>
         <td style="white-space:nowrap;">${r.days}일</td>
-        <td style="max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(r.reason || "")}">${escapeHtml(r.reason || "-")}</td>
-        <td>${badge}</td>
+        <td style="max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(reasonText)}">${escapeHtml(reasonText)}</td>
+        <td style="white-space:nowrap;">${badge}</td>
         ${lastCol}
       </tr>`;
     }).join("")}
