@@ -1687,10 +1687,24 @@ function renderAttendanceTab(empNo) {
   };
 
   $("#empDetailContent").innerHTML = `
-    <div style="background:var(--gray-50); padding:14px 16px; border-radius:8px; margin-bottom:14px; font-size:13.5px; line-height:1.8;">
-      <strong>${year}년 연차 현황</strong><br/>
-      부여 <strong>${bal.granted}일</strong> · 사용 <strong>${bal.used}일</strong> · 잔여 <strong style="color:var(--green-600);">${bal.remaining}일</strong>
-      ${bal.adjustment ? `<br/><span style="color:var(--gray-600); font-size:12px;">조정값: ${bal.adjustment >= 0 ? "+" : ""}${bal.adjustment}일</span>` : ""}
+    <div class="grid-3" style="margin-bottom:14px;">
+      <div class="stat-card yellow">
+        <div class="label">사용 연차</div>
+        <div class="value">${bal.used}<span class="unit">일</span></div>
+        <div style="font-size:11px; color:var(--gray-600); margin-top:4px;">올해 부여 ${bal.granted}일${bal.adjustment ? ` (조정 ${bal.adjustment >= 0 ? "+" : ""}${bal.adjustment})` : ""}</div>
+      </div>
+      <div class="stat-card green">
+        <div class="label">잔여 연차</div>
+        <div class="value">${bal.remaining}<span class="unit">일</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="label">그 외</div>
+        <div style="display:flex; gap:14px; margin-top:6px; flex-wrap:wrap;">
+          <div><span style="font-weight:700; font-size:18px; color:#8a6a14;">${counts.late}</span><span style="font-size:11px; color:var(--gray-600); margin-left:4px;">지각</span></div>
+          <div><span style="font-weight:700; font-size:18px; color:#a73838;">${counts.absent}</span><span style="font-size:11px; color:var(--gray-600); margin-left:4px;">결근</span></div>
+          <div><span style="font-weight:700; font-size:18px; color:var(--navy-700);">${counts.sick}</span><span style="font-size:11px; color:var(--gray-600); margin-left:4px;">병가</span></div>
+        </div>
+      </div>
     </div>
 
     ${isAdmin ? `
@@ -1699,21 +1713,6 @@ function renderAttendanceTab(empNo) {
         <button class="btn ghost sm" id="detailResetPw">비밀번호 리셋</button>
         <button class="btn ghost sm" id="detailAdjust">잔여 조정</button>
       </div>` : ""}
-
-    <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
-      <div style="flex:1; min-width:120px; background:#fcf3d5; padding:12px 14px; border-radius:8px;">
-        <div style="font-size:11px; color:#8a6a14; font-weight:600;">지각</div>
-        <div style="font-size:20px; font-weight:700; color:#8a6a14;">${counts.late}<span style="font-size:12px; font-weight:500;">건</span></div>
-      </div>
-      <div style="flex:1; min-width:120px; background:#fbe4e4; padding:12px 14px; border-radius:8px;">
-        <div style="font-size:11px; color:#a73838; font-weight:600;">무단결근</div>
-        <div style="font-size:20px; font-weight:700; color:#a73838;">${counts.absent}<span style="font-size:12px; font-weight:500;">건</span></div>
-      </div>
-      <div style="flex:1; min-width:120px; background:#e3edff; padding:12px 14px; border-radius:8px;">
-        <div style="font-size:11px; color:var(--navy-700); font-weight:600;">병가</div>
-        <div style="font-size:20px; font-weight:700; color:var(--navy-700);">${counts.sick}<span style="font-size:12px; font-weight:500;">건</span></div>
-      </div>
-    </div>
 
     ${isAdmin ? `
       <form id="addAttForm" style="background:var(--gray-50); padding:14px; border-radius:8px; margin-bottom:14px;">
