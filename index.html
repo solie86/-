@@ -262,9 +262,12 @@
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
 
-  /* 직원 관리 표 — 행 클릭 가능 */
+  /* 직원 관리 표 — 행 클릭 가능 + 살짝 큰 폰트 */
   table tbody tr.emp-row { cursor: pointer; }
   table tbody tr.emp-row:hover { background: #eef3ff; }
+  table.emp-table { font-size: 15.5px; }
+  table.emp-table th { font-size: 13.5px; }
+  table.emp-table th, table.emp-table td { padding: 17px 14px; }
 
   /* 정보 박스 (상세 모달 내 정보 행) */
   .info-row { display: flex; padding: 8px 0; border-bottom: 1px solid var(--gray-100); font-size: 13.5px; }
@@ -373,6 +376,8 @@
           <input id="suEmail" type="email" />
         </div>
       </div>
+      <label>휴대전화 *</label>
+      <input id="suPhone" type="tel" inputmode="numeric" required maxlength="13" placeholder="010-0000-0000" autocomplete="tel" />
       <div class="row-2">
         <div>
           <label>비밀번호 *</label>
@@ -485,6 +490,27 @@ async function hashPassword(pw) {
 }
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+// 전화번호: 입력값을 000-0000-0000 형태로 정규화 (입력 도중 부분 입력도 자연스럽게 처리)
+function formatPhoneNumber(value) {
+  const digits = String(value || "").replace(/\D/g, "").slice(0, 11);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 7) return digits.slice(0, 3) + "-" + digits.slice(3);
+  return digits.slice(0, 3) + "-" + digits.slice(3, 7) + "-" + digits.slice(7);
+}
+const PHONE_RE = /^\d{3}-\d{4}-\d{4}$/;
+function isValidPhone(value) {
+  return PHONE_RE.test(String(value || ""));
+}
+// 입력 필드에 자동 포맷팅 리스너 부착
+function attachPhoneAutoFormat(input) {
+  if (!input) return;
+  input.addEventListener("input", () => {
+    const before = input.value;
+    const after = formatPhoneNumber(before);
+    if (before !== after) input.value = after;
+  });
 }
 
 /* ------------------ 2. DB ↔ JS 변환 (DB: username, JS: 내부적으로 empNo 유지) ------------------
@@ -792,7 +818,7 @@ function showSignup(){
   // 폼 초기화 — 1단계로 리셋
   $("#signupMatchForm").style.display = "";
   $("#signupInfoForm").style.display = "none";
-  ["suName","suHire","suUsername","suEmail","suPw","suPw2"].forEach(id => { const el = $("#" + id); if (el) el.value = ""; });
+  ["suName","suHire","suUsername","suEmail","suPhone","suPw","suPw2"].forEach(id => { const el = $("#" + id); if (el) el.value = ""; });
   $("#suMatchErr").textContent = "";
   $("#suInfoErr").textContent = "";
 }
@@ -1263,7 +1289,7 @@ pages.employees = function () {
         <h3 style="margin:0;">직원 목록 (${list.length}명)</h3>
         <button class="btn green sm" id="openAddEmp">+ 신규 직원 추가</button>
       </div>
-      <table>
+      <table class="emp-table">
         <thead>
           <tr>
             <th>이름</th>
@@ -1412,7 +1438,7 @@ function openAddEmployeeModal() {
       </div>
       <div class="form-row">
         <div class="form-group"><label>이메일</label><input id="newEmail" type="email" /></div>
-        <div class="form-group"><label>휴대전화</label><input id="newPhone" type="tel" placeholder="예: 010-1234-5678" autocomplete="off" /></div>
+        <div class="form-group"><label>휴대전화</label><input id="newPhone" type="tel" inputmode="numeric" maxlength="13" placeholder="010-0000-0000" autocomplete="off" /></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>입사일 *</label><input id="newHire" type="date" required /></div>
@@ -1436,6 +1462,7 @@ function openAddEmployeeModal() {
   `;
   $("#modalBackdrop").classList.add("active");
   $("#closeModal").addEventListener("click", closeModal);
+  attachPhoneAutoFormat($("#newPhone"));
   $("#addEmpForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const btn = $("#saveEmp");
@@ -1446,11 +1473,15 @@ function openAddEmployeeModal() {
       const pw = $("#newPw").value;
       if (pw.length < 4) throw new Error("비밀번호는 최소 4자 이상이어야 합니다.");
 
+      const phoneRaw = $("#newPhone").value.trim();
+      const phone = phoneRaw ? formatPhoneNumber(phoneRaw) : null;
+      if (phone && !isValidPhone(phone)) throw new Error("휴대전화는 000-0000-0000 형태로 입력해 주세요.");
+
       await Store.addEmployee({
         empNo,
         name: $("#newName").value.trim(),
         email: $("#newEmail").value.trim() || null,
-        phone: $("#newPhone").value.trim() || null,
+        phone,
         hireDate: $("#newHire").value,
         department: null,
         position: null,
@@ -1483,7 +1514,7 @@ function openEditEmployeeModal(empNo) {
       </div>
       <div class="form-row">
         <div class="form-group"><label>이메일</label><input id="edEmail" type="email" value="${escapeHtml(emp.email || '')}" /></div>
-        <div class="form-group"><label>휴대전화</label><input id="edPhone" type="tel" placeholder="예: 010-1234-5678" value="${escapeHtml(emp.phone || '')}" autocomplete="off" /></div>
+        <div class="form-group"><label>휴대전화</label><input id="edPhone" type="tel" inputmode="numeric" maxlength="13" placeholder="010-0000-0000" value="${escapeHtml(emp.phone || '')}" autocomplete="off" /></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label>입사일 *</label><input id="edHire" type="date" required value="${emp.hireDate}" /></div>
@@ -1503,6 +1534,7 @@ function openEditEmployeeModal(empNo) {
   `;
   $("#modalBackdrop").classList.add("active");
   $("#closeModal").addEventListener("click", closeModal);
+  attachPhoneAutoFormat($("#edPhone"));
 
   $("#editEmpForm").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -1513,10 +1545,14 @@ function openEditEmployeeModal(empNo) {
       if (!newU) throw new Error("아이디를 입력해 주세요.");
       if (newU !== emp.empNo && Store.getEmployee(newU)) throw new Error("이미 사용 중인 아이디입니다.");
 
+      const phoneRaw = $("#edPhone").value.trim();
+      const phone = phoneRaw ? formatPhoneNumber(phoneRaw) : null;
+      if (phone && !isValidPhone(phone)) throw new Error("휴대전화는 000-0000-0000 형태로 입력해 주세요.");
+
       const patch = {
         name: $("#edName").value.trim(),
         email: $("#edEmail").value.trim() || null,
-        phone: $("#edPhone").value.trim() || null,
+        phone,
         hireDate: $("#edHire").value,
         role: $("#edRole").value,
       };
@@ -1637,7 +1673,6 @@ function renderEmployeeInfoTab(empNo) {
       ${row("입사일", emp.hireDate)}
       ${row("이메일", emp.email ? escapeHtml(emp.email) : `<span style="color:var(--gray-400);">미입력</span>`)}
       ${row("휴대전화", emp.phone ? escapeHtml(emp.phone) : `<span style="color:var(--gray-400);">미입력</span>`)}
-      ${row("부서", emp.department ? escapeHtml(emp.department) : `<span style="color:var(--gray-400);">미입력</span>`)}
       ${row("직급", emp.position ? escapeHtml(emp.position) : `<span style="color:var(--gray-400);">미입력</span>`)}
     </div>
     ${isAdmin ? `
@@ -2391,10 +2426,12 @@ $("#signupInfoForm").addEventListener("submit", async (e) => {
     if (!_signupMatchedEmp) throw new Error("매칭 정보가 없습니다. 다시 시도해 주세요.");
     const newU = $("#suUsername").value.trim();
     const email = $("#suEmail").value.trim() || null;
+    const phone = formatPhoneNumber($("#suPhone").value);
     const pw = $("#suPw").value;
     const pw2 = $("#suPw2").value;
 
     if (!newU) throw new Error("아이디를 입력해 주세요.");
+    if (!isValidPhone(phone)) throw new Error("휴대전화는 000-0000-0000 형태로 입력해 주세요.");
     if (pw.length < 4) throw new Error("비밀번호는 최소 4자 이상이어야 합니다.");
     if (pw !== pw2) throw new Error("비밀번호 확인이 일치하지 않습니다.");
 
@@ -2403,10 +2440,11 @@ $("#signupInfoForm").addEventListener("submit", async (e) => {
       throw new Error("이미 사용 중인 아이디입니다.");
     }
 
-    // 1) 임시 username을 새 username으로 변경 + 이메일 업데이트
+    // 1) 임시 username을 새 username으로 변경 + 이메일·전화번호 업데이트
     await Store.updateEmployee(_signupMatchedEmp.empNo, {
       empNo: newU,
       email,
+      phone,
     });
     // 2) 비밀번호 진짜 hash로 덮어쓰기
     await Store.updateEmployeePassword(newU, await hashPassword(pw));
@@ -2429,6 +2467,9 @@ $("#modalBackdrop").addEventListener("click", (e) => {
 });
 
 /* ------------------ 16. 부팅 ------------------ */
+// 회원가입 폼은 페이지 로드 시 이미 DOM에 있으므로 자동 포맷팅 리스너를 미리 부착
+attachPhoneAutoFormat(document.getElementById("suPhone"));
+
 (async function init() {
   showBoot();
   try {
