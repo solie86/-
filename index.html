@@ -218,7 +218,7 @@
     background: var(--gray-50); padding: 8px 6px;
   }
   .cal-head.sun, .cal-head.sat { color: var(--red-500); }
-  .cal-cell { padding: 6px 6px 8px; min-height: 90px; }
+  .cal-cell { padding: 6px 6px 8px; min-height: 130px; }
   .cal-cell .day { font-size: 11px; color: var(--gray-600); margin-bottom: 4px; }
   .cal-cell.other-month { background: #fafbfd; }
   .cal-cell.other-month .day { color: var(--gray-400); }
@@ -247,7 +247,7 @@
   .cal-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .cal-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
   @media (max-width: 768px) {
-    .cal-cell { min-height: 60px; padding: 4px; }
+    .cal-cell { min-height: 85px; padding: 4px; }
     .cal-evt { font-size: 9px; padding: 1px 4px; }
   }
 
@@ -925,7 +925,6 @@ pages.home = function () {
       <div class="cal-toolbar">
         <div class="title" id="calTitle"></div>
         <div class="nav-btns">
-          ${u.role === "admin" ? `<button class="btn green sm" id="calAddAtt">+ 근태 기록</button>` : ""}
           <button class="btn ghost sm" id="calToday">오늘</button>
           <button class="btn ghost sm" id="calPrev">◀</button>
           <button class="btn ghost sm" id="calNext">▶</button>
@@ -967,9 +966,6 @@ pages.home = function () {
     _calMonth = new Date(today().getFullYear(), today().getMonth(), 1);
     renderMonthCalendar();
   });
-  if (u.role === "admin") {
-    $("#calAddAtt").addEventListener("click", () => openDayAttendanceModal());
-  }
 };
 
 function renderMonthCalendar() {
@@ -1726,6 +1722,7 @@ function openDayAttendanceModal(dateStr) {
   const cu = currentUser();
   if (!cu || cu.role !== "admin") return;
   _attEditingId = null;
+  $("#modalBackdrop .modal").classList.add("wide");
   $("#modalBackdrop").classList.add("active");
   renderDayAttendanceModal(dateStr || fmtDate(today()));
 }
