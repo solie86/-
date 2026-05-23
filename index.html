@@ -402,8 +402,8 @@
       <button data-page="apply">연차 신청</button>
       <button data-page="profile">내 정보</button>
       <div class="section admin-only">관리자</div>
+      <button data-page="approvals" class="admin-only">연차 승인</button>
       <button data-page="employees" class="admin-only">직원 관리</button>
-      <button data-page="approvals" class="admin-only">승인 관리</button>
     </nav>
     <div class="user-box">
       <div class="name" id="userName">-</div>
@@ -2165,7 +2165,7 @@ function openDeleteRequestModal(id) {
   });
 }
 
-/* ------------------ 13. 페이지: 승인 관리 ------------------ */
+/* ------------------ 13. 페이지: 연차 승인 ------------------ */
 pages.approvals = function () {
   const u = currentUser();
   if (u.role !== "admin") return navigate("home");
@@ -2174,7 +2174,7 @@ pages.approvals = function () {
   const processed = all.filter((r) => r.status !== "pending");
 
   $("#mainContent").innerHTML = `
-    <h2 class="page-title">승인 관리</h2>
+    <h2 class="page-title">연차 승인</h2>
     <p class="page-sub">대기 중인 신청을 승인하거나 반려합니다.</p>
     <div class="card">
       <h3>승인 대기 (${pendings.length}건)</h3>
