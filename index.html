@@ -2023,11 +2023,9 @@ function openRequestDetailModal(id) {
       <div style="flex:1;">${value}</div>
     </div>`;
 
-  // 본인 + 대기 중이면 수정 가능
+  // 본인 + 대기 중이면 수정 가능 (관리자는 표의 '관리' 칼럼에서 수정)
   const u = currentUser();
   const canSelfEdit = u && r.empNo === u.empNo && r.status === "pending";
-  // 관리자이고 대기 중이 아닌(처리 완료) 신청은 관리자 수정 모달로
-  const canAdminEdit = u && u.role === "admin" && r.status !== "pending";
 
   $("#modalBody").innerHTML = `
     <h3>신청 상세 정보</h3>
@@ -2046,7 +2044,6 @@ function openRequestDetailModal(id) {
     </div>
     <div class="actions">
       ${canSelfEdit ? `<button type="button" class="btn green" id="detailSelfEdit">수정하기</button>` : ""}
-      ${canAdminEdit ? `<button type="button" class="btn" id="detailAdminEdit">관리자 수정</button>` : ""}
       <button type="button" class="btn ghost" id="closeModal">닫기</button>
     </div>
   `;
@@ -2057,12 +2054,6 @@ function openRequestDetailModal(id) {
     $("#detailSelfEdit").addEventListener("click", () => {
       closeModal();
       openEditRequestModal(id, { hideStatus: true });
-    });
-  }
-  if (canAdminEdit) {
-    $("#detailAdminEdit").addEventListener("click", () => {
-      closeModal();
-      openEditRequestModal(id);
     });
   }
 }
