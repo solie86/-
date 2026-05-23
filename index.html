@@ -1645,10 +1645,6 @@ function openEmployeeDetailModal(empNo, initialTab) {
 
 function renderEmployeeInfoTab(empNo) {
   const emp = Store.getEmployee(empNo);
-  const bal = calcBalance(emp);
-  const year = today().getFullYear();
-  const cur = currentUser();
-  const isAdmin = cur && cur.role === "admin";
 
   const row = (lbl, val) => `<div class="info-row"><div class="lbl">${lbl}</div><div class="val">${val}</div></div>`;
 
@@ -1663,24 +1659,7 @@ function renderEmployeeInfoTab(empNo) {
       ${row("부서", emp.department ? escapeHtml(emp.department) : `<span style="color:var(--gray-400);">미입력</span>`)}
       ${row("직급", emp.position ? escapeHtml(emp.position) : `<span style="color:var(--gray-400);">미입력</span>`)}
     </div>
-    <div style="background:var(--gray-50); padding:14px 16px; border-radius:8px; margin-top:14px; font-size:13.5px; line-height:1.8;">
-      <strong>${year}년 연차 현황</strong><br/>
-      부여 <strong>${bal.granted}일</strong> · 사용 <strong>${bal.used}일</strong> · 잔여 <strong style="color:var(--green-600);">${bal.remaining}일</strong>
-      ${bal.adjustment ? `<br/><span style="color:var(--gray-600); font-size:12px;">조정값: ${bal.adjustment >= 0 ? "+" : ""}${bal.adjustment}일</span>` : ""}
-    </div>
-    ${isAdmin ? `
-      <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
-        <button class="btn ghost sm" id="detailEdit">정보 수정</button>
-        <button class="btn ghost sm" id="detailResetPw">비밀번호 리셋</button>
-        <button class="btn ghost sm" id="detailAdjust">잔여 조정</button>
-      </div>` : ""}
   `;
-
-  if (isAdmin) {
-    $("#detailEdit").addEventListener("click", () => { closeModal(); openEditEmployeeModal(empNo); });
-    $("#detailResetPw").addEventListener("click", () => { closeModal(); openResetPwModal(empNo); });
-    $("#detailAdjust").addEventListener("click", () => { closeModal(); openAdjustBalanceModal(empNo); });
-  }
 }
 
 function attTypeLabel(t) {
@@ -1694,6 +1673,9 @@ function attTypeBadge(t) {
 function renderAttendanceTab(empNo) {
   const cur = currentUser();
   const isAdmin = cur && cur.role === "admin";
+  const emp = Store.getEmployee(empNo);
+  const bal = calcBalance(emp);
+  const year = today().getFullYear();
   const records = Store.getAttendanceByEmp(empNo)
     .slice()
     .sort((a, b) => (a.recordDate < b.recordDate ? 1 : -1));
@@ -1705,6 +1687,19 @@ function renderAttendanceTab(empNo) {
   };
 
   $("#empDetailContent").innerHTML = `
+    <div style="background:var(--gray-50); padding:14px 16px; border-radius:8px; margin-bottom:14px; font-size:13.5px; line-height:1.8;">
+      <strong>${year}년 연차 현황</strong><br/>
+      부여 <strong>${bal.granted}일</strong> · 사용 <strong>${bal.used}일</strong> · 잔여 <strong style="color:var(--green-600);">${bal.remaining}일</strong>
+      ${bal.adjustment ? `<br/><span style="color:var(--gray-600); font-size:12px;">조정값: ${bal.adjustment >= 0 ? "+" : ""}${bal.adjustment}일</span>` : ""}
+    </div>
+
+    ${isAdmin ? `
+      <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+        <button class="btn ghost sm" id="detailEdit">정보 수정</button>
+        <button class="btn ghost sm" id="detailResetPw">비밀번호 리셋</button>
+        <button class="btn ghost sm" id="detailAdjust">잔여 조정</button>
+      </div>` : ""}
+
     <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
       <div style="flex:1; min-width:120px; background:#fcf3d5; padding:12px 14px; border-radius:8px;">
         <div style="font-size:11px; color:#8a6a14; font-weight:600;">지각</div>
@@ -1773,6 +1768,11 @@ function renderAttendanceTab(empNo) {
   `;
 
   if (isAdmin) {
+    // 상단 단축 버튼 (기본정보에서 이전)
+    $("#detailEdit").addEventListener("click", () => { closeModal(); openEditEmployeeModal(empNo); });
+    $("#detailResetPw").addEventListener("click", () => { closeModal(); openResetPwModal(empNo); });
+    $("#detailAdjust").addEventListener("click", () => { closeModal(); openAdjustBalanceModal(empNo); });
+
     $("#addAttForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const btn = $("#saveAtt");
