@@ -400,8 +400,20 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 /* ------------------ 1. 유틸 ------------------ */
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+// 날짜 처리 — 시간대 안전
+// DB의 date 컬럼은 "2026-05-04" 형식. new Date()로 파싱하면 UTC 자정으로 해석되어
+// 음수 시간대에서 하루 밀리는 문제 발생. 항상 parseLocalDate 를 통해 로컬 자정으로 만든다.
+function parseLocalDate(s) {
+  if (!s) return null;
+  if (s instanceof Date) return s;
+  const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return new Date(s);
+}
 const fmtDate = (d) => {
   if (!d) return "-";
+  // ISO 날짜 문자열(시간 없는 형태)이면 그대로 반환 — 시간대 변환 회피
+  if (typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
   if (!(d instanceof Date)) d = new Date(d);
   const yy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -543,7 +555,7 @@ const Store = {
 /* ------------------ 4. 연차 계산 ------------------ */
 function calcGrantedForYear(emp, year, asOf = today()) {
   const policy = Store.getPolicy();
-  const hireDate = new Date(emp.hireDate);
+  const hireDate = parseLocalDate(emp.hireDate);
   const yearEnd = new Date(year, 11, 31, 23, 59, 59);
   const ref = asOf < yearEnd ? asOf : yearEnd;
   if (hireDate > new Date(year, 11, 31)) return 0;
@@ -565,7 +577,7 @@ function calcGrantedForYear(emp, year, asOf = today()) {
 function calcUsedForYear(empNo, year) {
   return Store.getRequests()
     .filter((r) => r.empNo === empNo && r.status === "approved")
-    .filter((r) => new Date(r.startDate).getFullYear() === year)
+    .filter((r) => parseLocalDate(r.startDate).getFullYear() === year)
     .reduce((sum, r) => sum + Number(r.days || 0), 0);
 }
 function calcBalance(emp, year = today().getFullYear()) {
@@ -655,7 +667,7 @@ pages.home = function () {
   if (u.role === "admin") {
     const allPending = Store.getRequests().filter((r) => r.status === "pending").length;
     const approvedThisYear = Store.getRequests().filter(
-      (r) => r.status === "approved" && new Date(r.startDate).getFullYear() === today().getFullYear()
+      (r) => r.status === "approved" && parseLocalDate(r.startDate).getFullYear() === today().getFullYear()
     ).length;
     adminBlock = `
       <div class="card">
@@ -726,12 +738,13 @@ function renderMonthCalendar() {
   const todayStr = fmtDate(today());
 
   // 날짜별 일정 매핑 (반려는 제외)
+  // parseLocalDate 사용 — 시간대 변환으로 인한 -1일 밀림 방지
   const eventsByDate = {};
   Store.getRequests()
     .filter(r => r.status === "pending" || r.status === "approved")
     .forEach(r => {
-      const s = new Date(r.startDate);
-      const e = new Date(r.endDate);
+      const s = parseLocalDate(r.startDate);
+      const e = parseLocalDate(r.endDate);
       const d = new Date(s);
       while (d <= e) {
         const k = fmtDate(d);
