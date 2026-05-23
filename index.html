@@ -87,6 +87,8 @@
   .sidebar {
     width: 220px; background: var(--navy-900); color: var(--white);
     padding: 24px 0; display: flex; flex-direction: column; flex-shrink: 0;
+    position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    align-self: flex-start;
   }
   .sidebar .brand { padding: 0 22px 18px; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 16px; }
   .sidebar .brand h2 { margin: 0; font-size: 16px; font-weight: 700; }
@@ -179,7 +181,11 @@
 
   @media (max-width: 768px) {
     .app.active { flex-direction: column; }
-    .sidebar { width: 100%; flex-direction: row; align-items: center; padding: 12px 14px; overflow-x: auto; }
+    .sidebar {
+      width: 100%; flex-direction: row; align-items: center; padding: 12px 14px;
+      overflow-x: auto; overflow-y: visible;
+      position: static; height: auto;
+    }
     .sidebar .brand { border-bottom: none; padding: 0 12px 0 0; margin-bottom: 0; flex-shrink: 0; border-right: 1px solid rgba(255,255,255,0.1); margin-right: 8px; }
     .sidebar nav { display: flex; padding: 0; gap: 4px; flex: 1; }
     .sidebar nav .section { display: none; }
@@ -382,6 +388,7 @@ const dbToEmp = (r) => r && ({
   empNo: r.username, name: r.name, email: r.email,
   hireDate: r.hire_date, position: r.position, department: r.department,
   passwordHash: r.password_hash, role: r.role,
+  leaveAdjustment: Number(r.leave_adjustment || 0),
 });
 const empToDb = (e) => ({
   username: e.empNo, name: e.name, email: e.email,
@@ -440,6 +447,7 @@ const Store = {
     if ("position" in patch) row.position = patch.position;
     if ("department" in patch) row.department = patch.department;
     if ("role" in patch) row.role = patch.role;
+    if ("leaveAdjustment" in patch) row.leave_adjustment = patch.leaveAdjustment;
     if ("empNo" in patch) row.username = patch.empNo; // 아이디 변경
     if (Object.keys(row).length === 0) return;
     const { error } = await sb.from("employees").update(row).eq("username", currentUsername);
@@ -517,7 +525,8 @@ function calcUsedForYear(empNo, year) {
 function calcBalance(emp, year = today().getFullYear()) {
   const granted = calcGrantedForYear(emp, year);
   const used = calcUsedForYear(emp.empNo, year);
-  return { granted, used, remaining: Math.max(0, granted - used) };
+  const adj = Number(emp.leaveAdjustment || 0);
+  return { granted, used, adjustment: adj, remaining: Math.max(0, granted + adj - used) };
 }
 
 /* ------------------ 5. 인증 ------------------ */
@@ -662,8 +671,7 @@ pages.apply = function () {
 
   $("#mainContent").innerHTML = `
     <h2 class="page-title">연차 신청</h2>
-    <p class="page-sub">신청 후 관리자 승인을 거치면 사용 연차에 반영됩니다.</p>
-    <div class="info-banner">현재 잔여 연차 <strong>${bal.remaining}일</strong> · 되도록 빠른 신청을 권장합니다.</div>
+    <p class="page-sub">신청 후 관리자 승인을 거치면 사용 연차에 반영됩니다. (현재 잔여 ${bal.remaining}일)</p>
     <div class="card">
       <h3>신청서 작성</h3>
       <form id="applyForm">
@@ -911,7 +919,8 @@ pages.employees = function () {
               <td style="text-align:right;"><strong>${bal.remaining}일</strong></td>
               <td style="text-align:right; white-space:nowrap;">
                 <button class="btn ghost xs" data-edit="${escapeHtml(e.empNo)}">수정</button>
-                <button class="btn ghost xs" data-reset="${escapeHtml(e.empNo)}">비번 리셋</button>
+                <button class="btn ghost xs" data-adjust="${escapeHtml(e.empNo)}">잔여조정</button>
+                <button class="btn ghost xs" data-reset="${escapeHtml(e.empNo)}">비번리셋</button>
               </td>
             </tr>`;
           }).join("")}
@@ -926,7 +935,63 @@ pages.employees = function () {
   $$("button[data-reset]").forEach((btn) => {
     btn.addEventListener("click", () => openResetPwModal(btn.dataset.reset));
   });
+  $$("button[data-adjust]").forEach((btn) => {
+    btn.addEventListener("click", () => openAdjustBalanceModal(btn.dataset.adjust));
+  });
 };
+
+function openAdjustBalanceModal(empNo) {
+  const emp = Store.getEmployee(empNo);
+  if (!emp) return alert("직원 정보를 찾을 수 없습니다.");
+  const year = today().getFullYear();
+  const granted = calcGrantedForYear(emp, year);
+  const used = calcUsedForYear(emp.empNo, year);
+  const adj = Number(emp.leaveAdjustment || 0);
+  const currentRemain = Math.max(0, granted + adj - used);
+
+  $("#modalBody").innerHTML = `
+    <h3>잔여 연차 조정 — ${escapeHtml(emp.name)}</h3>
+    <div style="background:var(--gray-50); padding:12px 14px; border-radius:8px; margin-bottom:16px; font-size:13px; line-height:1.8;">
+      자동 부여(${year}년): <strong>${granted}일</strong><br/>
+      현재 사용: <strong>${used}일</strong><br/>
+      현재 조정값: <strong>${adj >= 0 ? "+" : ""}${adj}일</strong>
+      <div style="margin-top:6px; padding-top:6px; border-top:1px solid var(--gray-200);">
+        현재 잔여: <strong style="color:var(--green-600);">${currentRemain}일</strong>
+      </div>
+    </div>
+    <form id="adjForm">
+      <div class="form-group">
+        <label>새 잔여 연차 *</label>
+        <input id="newRemain" type="number" step="0.5" min="0" required value="${currentRemain}" />
+        <div class="hint">입력한 값이 즉시 잔여 연차로 반영됩니다. (내부적으로 부여량을 조정해서 처리)</div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn ghost" id="closeModal">취소</button>
+        <button type="submit" class="btn green" id="saveAdj">저장</button>
+      </div>
+    </form>
+  `;
+  $("#modalBackdrop").classList.add("active");
+  $("#closeModal").addEventListener("click", closeModal);
+
+  $("#adjForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#saveAdj");
+    btn.disabled = true;
+    try {
+      const newRemain = Number($("#newRemain").value);
+      if (isNaN(newRemain) || newRemain < 0) throw new Error("0 이상의 숫자를 입력해 주세요.");
+      // 새 조정값 = 원하는 잔여 - (자동 부여 - 사용)
+      const newAdj = newRemain - granted + used;
+      await Store.updateEmployee(empNo, { leaveAdjustment: newAdj });
+      closeModal();
+      navigate("employees");
+    } catch (err) {
+      alert("저장 실패: " + (err.message || err));
+      btn.disabled = false;
+    }
+  });
+}
 
 function openAddEmployeeModal() {
   $("#modalBody").innerHTML = `
