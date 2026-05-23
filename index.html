@@ -9,78 +9,53 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
-  /* ============================================================
-     디자인 토큰 — 화이트 / 네이비 / 그린 포인트
-     ============================================================ */
   :root {
-    --navy-900: #0f1f3d;
-    --navy-700: #1e3a5f;
-    --navy-500: #345078;
-    --green-500: #2f9e6b;
-    --green-600: #237a52;
+    --navy-900: #0f1f3d; --navy-700: #1e3a5f; --navy-500: #345078;
+    --green-500: #2f9e6b; --green-600: #237a52;
     --yellow-500: #e4b53a;
-    --gray-50:  #f6f7fb;
-    --gray-100: #eceff5;
-    --gray-200: #dfe3eb;
-    --gray-400: #9aa3b2;
-    --gray-600: #555f72;
-    --gray-800: #232a36;
+    --gray-50:  #f6f7fb; --gray-100: #eceff5; --gray-200: #dfe3eb;
+    --gray-400: #9aa3b2; --gray-600: #555f72; --gray-800: #232a36;
     --red-500: #d44a4a;
     --white: #ffffff;
     --shadow-sm: 0 1px 2px rgba(15,31,61,0.06);
     --shadow-md: 0 4px 16px rgba(15,31,61,0.08);
     --radius: 10px;
   }
-
   * { box-sizing: border-box; }
   html, body {
     margin: 0; padding: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Noto Sans KR",
                  "Apple SD Gothic Neo", "Segoe UI", Roboto, sans-serif;
-    background: var(--gray-50);
-    color: var(--gray-800);
-    line-height: 1.5;
-    font-size: 14px;
+    background: var(--gray-50); color: var(--gray-800);
+    line-height: 1.5; font-size: 14px;
   }
   button { font-family: inherit; cursor: pointer; }
   input, select, textarea { font-family: inherit; font-size: 14px; }
   a { color: inherit; text-decoration: none; }
 
-  /* ============================================================
-     로딩 화면
-     ============================================================ */
   .boot-wrap {
-    min-height: 100vh;
-    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
     background: linear-gradient(135deg, var(--navy-900), var(--navy-500));
-    color: white;
-    font-size: 14px;
+    color: white; font-size: 14px;
   }
   .boot-wrap .spinner {
     width: 36px; height: 36px;
     border: 3px solid rgba(255,255,255,0.25);
-    border-top-color: white;
-    border-radius: 50%;
+    border-top-color: white; border-radius: 50%;
     animation: spin 0.8s linear infinite;
     margin-right: 14px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ============================================================
-     로그인 / 초기 설정
-     ============================================================ */
   .login-wrap {
-    min-height: 100vh;
-    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
     background: linear-gradient(135deg, var(--navy-900), var(--navy-500));
     padding: 24px;
   }
   .login-card {
     width: 100%; max-width: 420px;
-    background: var(--white);
-    border-radius: 16px;
-    padding: 36px 32px;
-    box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+    background: var(--white); border-radius: 16px;
+    padding: 36px 32px; box-shadow: 0 12px 40px rgba(0,0,0,0.2);
   }
   .login-card h1 { margin: 0 0 6px; font-size: 22px; color: var(--navy-900); }
   .login-card .sub { margin: 0 0 24px; color: var(--gray-600); font-size: 13px; }
@@ -107,9 +82,6 @@
   }
   .login-card .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
-  /* ============================================================
-     앱 레이아웃
-     ============================================================ */
   .app { display: none; min-height: 100vh; }
   .app.active { display: flex; }
   .sidebar {
@@ -151,15 +123,10 @@
   .page-title { font-size: 22px; font-weight: 700; color: var(--navy-900); margin: 0 0 4px; }
   .page-sub { color: var(--gray-600); font-size: 13px; margin: 0 0 24px; }
 
-  /* 공통 카드/통계/버튼/폼/테이블/뱃지 */
   .card { background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 22px; margin-bottom: 18px; }
   .card h3 { margin: 0 0 14px; font-size: 15px; color: var(--navy-900); }
   .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-  .stat-card {
-    background: var(--white); border-radius: var(--radius);
-    padding: 18px 20px; box-shadow: var(--shadow-sm);
-    border-left: 4px solid var(--navy-500);
-  }
+  .stat-card { background: var(--white); border-radius: var(--radius); padding: 18px 20px; box-shadow: var(--shadow-sm); border-left: 4px solid var(--navy-500); }
   .stat-card.green { border-left-color: var(--green-500); }
   .stat-card.yellow { border-left-color: var(--yellow-500); }
   .stat-card .label { color: var(--gray-600); font-size: 12px; margin-bottom: 6px; }
@@ -176,6 +143,7 @@
   .btn.danger { background: var(--red-500); }
   .btn.danger:hover { background: #b53b3b; }
   .btn.sm { padding: 6px 11px; font-size: 12px; }
+  .btn.xs { padding: 4px 8px; font-size: 11px; }
 
   .form-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 12px; }
   .form-row.cols-3 { grid-template-columns: repeat(3, 1fr); }
@@ -188,6 +156,7 @@
   }
   .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--navy-500); }
   .form-group textarea { resize: vertical; min-height: 70px; }
+  .form-group .hint { font-size: 11px; color: var(--gray-400); margin-top: 4px; }
 
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   table th, table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--gray-100); }
@@ -204,10 +173,10 @@
 
   .info-banner { background: #eff5ff; border: 1px solid #d6e4ff; color: var(--navy-700); padding: 10px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 16px; }
   .err-banner { background: #fdebeb; border: 1px solid #f5c6c6; color: #8b2929; padding: 10px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 16px; }
+  .ok-banner { background: #e8f5ee; border: 1px solid #c4e6d2; color: #1d6e44; padding: 10px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 16px; }
   .empty { padding: 32px; text-align: center; color: var(--gray-400); font-size: 13px; }
   .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
 
-  /* 반응형 */
   @media (max-width: 768px) {
     .app.active { flex-direction: column; }
     .sidebar { width: 100%; flex-direction: row; align-items: center; padding: 12px 14px; overflow-x: auto; }
@@ -225,17 +194,15 @@
     table th, table td { padding: 8px 6px; }
   }
 
-  /* 모달 */
   .modal-backdrop { position: fixed; inset: 0; background: rgba(15,31,61,0.45); display: none; align-items: center; justify-content: center; z-index: 100; padding: 18px; }
   .modal-backdrop.active { display: flex; }
-  .modal { background: var(--white); border-radius: 12px; padding: 24px; width: 100%; max-width: 460px; box-shadow: var(--shadow-md); }
+  .modal { background: var(--white); border-radius: 12px; padding: 24px; width: 100%; max-width: 480px; box-shadow: var(--shadow-md); max-height: 90vh; overflow-y: auto; }
   .modal h3 { margin: 0 0 14px; color: var(--navy-900); }
   .modal .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 </style>
 </head>
 <body>
 
-<!-- 부팅 화면 -->
 <div id="bootScreen" class="boot-wrap">
   <div class="spinner"></div>
   <div>시스템을 불러오는 중입니다...</div>
@@ -249,8 +216,8 @@
     <form id="setupForm">
       <div class="row-2">
         <div>
-          <label>사번 *</label>
-          <input id="setupEmpNo" required placeholder="예: admin" />
+          <label>아이디 *</label>
+          <input id="setupUsername" required placeholder="예: admin" autocomplete="off" />
         </div>
         <div>
           <label>이름 *</label>
@@ -279,10 +246,10 @@
 <div id="loginScreen" class="login-wrap" style="display:none;">
   <div class="login-card">
     <h1>사내 연차 관리 시스템</h1>
-    <p class="sub">사번과 비밀번호로 로그인해 주세요.</p>
+    <p class="sub">아이디와 비밀번호로 로그인해 주세요.</p>
     <form id="loginForm">
-      <label for="loginEmpNo">사번</label>
-      <input id="loginEmpNo" type="text" autocomplete="username" required />
+      <label for="loginUsername">아이디</label>
+      <input id="loginUsername" type="text" autocomplete="username" required />
       <label for="loginPw">비밀번호</label>
       <input id="loginPw" type="password" autocomplete="current-password" required />
       <button type="submit" class="btn-primary" id="loginBtn">로그인</button>
@@ -303,6 +270,7 @@
       <button data-page="home">홈</button>
       <button data-page="myLeave">내 연차</button>
       <button data-page="apply">연차 신청</button>
+      <button data-page="profile">내 정보</button>
       <div class="section admin-only">관리자</div>
       <button data-page="employees" class="admin-only">직원 관리</button>
       <button data-page="approvals" class="admin-only">승인 관리</button>
@@ -316,17 +284,13 @@
   <main class="main" id="mainContent"></main>
 </div>
 
-<!-- 모달 -->
 <div id="modalBackdrop" class="modal-backdrop">
   <div class="modal" id="modalBody"></div>
 </div>
 
 <script>
 /* ==================================================================
-   사내 연차 관리 시스템 — Supabase 연동 버전
-   - 데이터: Supabase (PostgreSQL)
-   - 인증: 사번 + 비밀번호 (SHA-256 해시, employees 테이블)
-   - 세션 유지: localStorage (브라우저별)
+   사내 연차 관리 시스템 — v2 (아이디 로그인 + 정보 수정 기능)
    ================================================================== */
 
 /* ------------------ 0. Supabase 연결 ------------------ */
@@ -352,24 +316,30 @@ async function hashPassword(pw) {
   const buf = await crypto.subtle.digest("SHA-256", enc.encode(pw));
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
 
-/* ------------------ 2. DB ↔ JS 필드 변환 (snake_case ↔ camelCase) ------------------ */
+/* ------------------ 2. DB ↔ JS 변환 (DB: username, JS: 내부적으로 empNo 유지) ------------------
+   * 내부 변수명은 empNo로 유지하지만 의미는 "아이디(username)"
+   * DB 컬럼명만 username으로 매핑
+   ------------------------------------------------------------- */
 const dbToEmp = (r) => r && ({
-  empNo: r.emp_no, name: r.name, email: r.email,
+  empNo: r.username, name: r.name, email: r.email,
   hireDate: r.hire_date, position: r.position, department: r.department,
   passwordHash: r.password_hash, role: r.role,
 });
 const empToDb = (e) => ({
-  emp_no: e.empNo, name: e.name, email: e.email,
+  username: e.empNo, name: e.name, email: e.email,
   hire_date: e.hireDate, position: e.position, department: e.department,
   password_hash: e.passwordHash, role: e.role,
 });
 const dbToReq = (r) => r && ({
-  id: r.id, empNo: r.emp_no, requestedAt: r.requested_at,
+  id: r.id, empNo: r.username, requestedAt: r.requested_at,
   startDate: r.start_date, endDate: r.end_date,
   days: Number(r.days), halfDayPart: r.half_day_part,
   reason: r.reason, status: r.status,
-  approverEmpNo: r.approver_emp_no, processedAt: r.processed_at,
+  approverEmpNo: r.approver_username, processedAt: r.processed_at,
 });
 const dbToPolicy = (r) => r ? ({
   monthlyAccrual: Number(r.monthly_accrual),
@@ -377,16 +347,13 @@ const dbToPolicy = (r) => r ? ({
   allowPastDate: r.allow_past_date,
 }) : { monthlyAccrual: 1, yearOneBulk: 15, allowPastDate: true };
 
-/* ------------------ 3. 저장 모듈 (Supabase) ------------------
-   - 읽기: refresh() 후 캐시에서 동기 접근
-   - 쓰기: 비동기로 DB에 반영 후 자동 refresh()
-   ----------------------------------------------------------- */
+/* ------------------ 3. 저장 모듈 ------------------ */
 const Store = {
   _cache: { employees: [], requests: [], policy: null },
 
   async refresh() {
     const [empsRes, reqsRes, polRes] = await Promise.all([
-      sb.from("employees").select("*").order("emp_no"),
+      sb.from("employees").select("*").order("username"),
       sb.from("leave_requests").select("*").order("requested_at", { ascending: false }),
       sb.from("policy").select("*").eq("id", 1).maybeSingle(),
     ]);
@@ -398,22 +365,44 @@ const Store = {
     this._cache.policy    = dbToPolicy(polRes.data);
   },
 
-  // 동기 읽기
   getEmployees() { return this._cache.employees; },
   getEmployee(empNo) { return this._cache.employees.find((e) => e.empNo === empNo); },
   getRequests() { return this._cache.requests; },
   getRequestsByEmp(empNo) { return this._cache.requests.filter((r) => r.empNo === empNo); },
   getPolicy() { return this._cache.policy; },
 
-  // 비동기 쓰기
   async addEmployee(emp) {
     const { error } = await sb.from("employees").insert(empToDb(emp));
     if (error) throw error;
     await this.refresh();
   },
+
+  // 직원 정보 수정 (비밀번호 제외)
+  async updateEmployee(currentUsername, patch) {
+    const row = {};
+    if ("name" in patch) row.name = patch.name;
+    if ("email" in patch) row.email = patch.email;
+    if ("hireDate" in patch) row.hire_date = patch.hireDate;
+    if ("position" in patch) row.position = patch.position;
+    if ("department" in patch) row.department = patch.department;
+    if ("role" in patch) row.role = patch.role;
+    if ("empNo" in patch) row.username = patch.empNo; // 아이디 변경
+    if (Object.keys(row).length === 0) return;
+    const { error } = await sb.from("employees").update(row).eq("username", currentUsername);
+    if (error) throw error;
+    await this.refresh();
+  },
+
+  // 비밀번호만 변경
+  async updateEmployeePassword(username, newHash) {
+    const { error } = await sb.from("employees").update({ password_hash: newHash }).eq("username", username);
+    if (error) throw error;
+    await this.refresh();
+  },
+
   async addRequest(req) {
     const row = {
-      emp_no: req.empNo,
+      username: req.empNo,
       start_date: req.startDate,
       end_date: req.endDate,
       days: req.days,
@@ -428,14 +417,13 @@ const Store = {
   async updateRequest(id, patch) {
     const row = {};
     if ("status" in patch) row.status = patch.status;
-    if ("approverEmpNo" in patch) row.approver_emp_no = patch.approverEmpNo;
+    if ("approverEmpNo" in patch) row.approver_username = patch.approverEmpNo;
     if ("processedAt" in patch) row.processed_at = patch.processedAt;
     const { error } = await sb.from("leave_requests").update(row).eq("id", id);
     if (error) throw error;
     await this.refresh();
   },
 
-  // 세션 (브라우저 로컬)
   setSession(empNo) { localStorage.setItem("leave_session_v2", empNo); },
   getSession() {
     const s = localStorage.getItem("leave_session_v2");
@@ -444,7 +432,7 @@ const Store = {
   clearSession() { localStorage.removeItem("leave_session_v2"); },
 };
 
-/* ------------------ 4. 연차 발생 계산 로직 ------------------ */
+/* ------------------ 4. 연차 계산 ------------------ */
 function calcGrantedForYear(emp, year, asOf = today()) {
   const policy = Store.getPolicy();
   const hireDate = new Date(emp.hireDate);
@@ -479,13 +467,13 @@ function calcBalance(emp, year = today().getFullYear()) {
 }
 
 /* ------------------ 5. 인증 ------------------ */
-async function login(empNo, pw) {
+async function login(username, pw) {
   await Store.refresh();
-  const emp = Store.getEmployee(empNo);
-  if (!emp) return { ok: false, msg: "사번을 찾을 수 없습니다." };
+  const emp = Store.getEmployee(username);
+  if (!emp) return { ok: false, msg: "아이디를 찾을 수 없습니다." };
   const h = await hashPassword(pw);
   if (h !== emp.passwordHash) return { ok: false, msg: "비밀번호가 올바르지 않습니다." };
-  Store.setSession(empNo);
+  Store.setSession(username);
   return { ok: true, emp };
 }
 function currentUser() {
@@ -502,7 +490,7 @@ function hideAllScreens() {
 }
 function showBoot()  { hideAllScreens(); $("#bootScreen").style.display  = "flex"; }
 function showSetup(){ hideAllScreens(); $("#setupScreen").style.display = "flex"; }
-function showLogin(){ hideAllScreens(); $("#loginScreen").style.display = "flex"; $("#loginEmpNo").value=""; $("#loginPw").value=""; $("#loginErr").textContent=""; }
+function showLogin(){ hideAllScreens(); $("#loginScreen").style.display = "flex"; $("#loginUsername").value=""; $("#loginPw").value=""; $("#loginErr").textContent=""; }
 function showApp(){
   hideAllScreens();
   $("#app").classList.add("active");
@@ -531,10 +519,6 @@ async function navigate(page) {
   const fn = pages[page] || pages.home;
   $("#mainContent").innerHTML = "";
   fn();
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 
 /* ------------------ 8. 페이지: 홈 ------------------ */
@@ -693,12 +677,8 @@ pages.apply = function () {
       if (days > bal2.remaining) throw new Error(`잔여 연차(${bal2.remaining}일)보다 많이 신청할 수 없습니다.`);
 
       await Store.addRequest({
-        empNo: u.empNo,
-        startDate: start,
-        endDate: end,
-        days,
-        halfDayPart: halfPart,
-        reason,
+        empNo: u.empNo, startDate: start, endDate: end,
+        days, halfDayPart: halfPart, reason,
       });
 
       alert("신청이 등록되었습니다. 관리자 승인을 기다려 주세요.");
@@ -710,7 +690,138 @@ pages.apply = function () {
   });
 };
 
-/* ------------------ 11. 페이지: 직원 관리 (관리자) ------------------ */
+/* ------------------ 11. 페이지: 내 정보 (아이디/비밀번호 수정) ------------------ */
+pages.profile = function () {
+  const u = currentUser();
+
+  $("#mainContent").innerHTML = `
+    <h2 class="page-title">내 정보</h2>
+    <p class="page-sub">아이디와 비밀번호를 변경할 수 있습니다.</p>
+
+    <div class="card">
+      <h3>기본 정보</h3>
+      <div class="form-row">
+        <div class="form-group"><label>이름</label><input value="${escapeHtml(u.name)}" disabled /></div>
+        <div class="form-group"><label>현재 아이디</label><input value="${escapeHtml(u.empNo)}" disabled /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>부서</label><input value="${escapeHtml(u.department || '-')}" disabled /></div>
+        <div class="form-group"><label>직급</label><input value="${escapeHtml(u.position || '-')}" disabled /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>이메일</label><input value="${escapeHtml(u.email || '-')}" disabled /></div>
+        <div class="form-group"><label>입사일</label><input value="${u.hireDate}" disabled /></div>
+      </div>
+      <p class="page-sub" style="margin: 8px 0 0; font-size: 12px;">위 정보 수정은 관리자에게 요청하세요.</p>
+    </div>
+
+    <div class="card">
+      <h3>아이디 변경</h3>
+      <form id="changeUsernameForm">
+        <div class="form-row">
+          <div class="form-group">
+            <label>새 아이디 *</label>
+            <input id="newUsername" required placeholder="영문/숫자 권장" autocomplete="off" />
+            <div class="hint">변경하면 다음 로그인부터 새 아이디를 사용해야 합니다.</div>
+          </div>
+          <div class="form-group">
+            <label>현재 비밀번호 (확인) *</label>
+            <input id="pwForUsername" type="password" required />
+          </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end;">
+          <button type="submit" class="btn" id="saveUsername">아이디 변경</button>
+        </div>
+        <div class="err" id="usernameErr" style="margin-top:10px;"></div>
+        <div class="ok-banner" id="usernameOk" style="display:none; margin-top:10px;"></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3>비밀번호 변경</h3>
+      <form id="changePwForm">
+        <div class="form-row cols-3">
+          <div class="form-group">
+            <label>현재 비밀번호 *</label>
+            <input id="curPw" type="password" required />
+          </div>
+          <div class="form-group">
+            <label>새 비밀번호 *</label>
+            <input id="newPw" type="password" required placeholder="최소 4자" />
+          </div>
+          <div class="form-group">
+            <label>새 비밀번호 확인 *</label>
+            <input id="newPw2" type="password" required />
+          </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end;">
+          <button type="submit" class="btn green" id="savePw">비밀번호 변경</button>
+        </div>
+        <div class="err" id="pwErr" style="margin-top:10px;"></div>
+        <div class="ok-banner" id="pwOk" style="display:none; margin-top:10px;"></div>
+      </form>
+    </div>
+  `;
+
+  // 아이디 변경
+  $("#changeUsernameForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#saveUsername");
+    const errEl = $("#usernameErr");
+    const okEl = $("#usernameOk");
+    errEl.textContent = ""; okEl.style.display = "none";
+    btn.disabled = true;
+    try {
+      const newU = $("#newUsername").value.trim();
+      const pw = $("#pwForUsername").value;
+      if (!newU) throw new Error("새 아이디를 입력해 주세요.");
+      if (newU === u.empNo) throw new Error("현재와 동일한 아이디입니다.");
+      if (Store.getEmployee(newU)) throw new Error("이미 사용 중인 아이디입니다.");
+      const h = await hashPassword(pw);
+      if (h !== u.passwordHash) throw new Error("현재 비밀번호가 올바르지 않습니다.");
+
+      await Store.updateEmployee(u.empNo, { empNo: newU });
+      Store.setSession(newU); // 세션도 새 아이디로
+      okEl.textContent = `아이디가 "${newU}"로 변경되었습니다.`;
+      okEl.style.display = "";
+      // 페이지 새로 그리기 (변경 사항 반영)
+      setTimeout(() => navigate("profile"), 800);
+    } catch (err) {
+      errEl.textContent = err.message || err;
+      btn.disabled = false;
+    }
+  });
+
+  // 비밀번호 변경
+  $("#changePwForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#savePw");
+    const errEl = $("#pwErr");
+    const okEl = $("#pwOk");
+    errEl.textContent = ""; okEl.style.display = "none";
+    btn.disabled = true;
+    try {
+      const cur = $("#curPw").value;
+      const n1 = $("#newPw").value;
+      const n2 = $("#newPw2").value;
+      if (n1.length < 4) throw new Error("새 비밀번호는 4자 이상이어야 합니다.");
+      if (n1 !== n2) throw new Error("새 비밀번호 확인이 일치하지 않습니다.");
+      const hCur = await hashPassword(cur);
+      if (hCur !== u.passwordHash) throw new Error("현재 비밀번호가 올바르지 않습니다.");
+      const hNew = await hashPassword(n1);
+      await Store.updateEmployeePassword(u.empNo, hNew);
+      okEl.textContent = "비밀번호가 변경되었습니다.";
+      okEl.style.display = "";
+      $("#curPw").value = ""; $("#newPw").value = ""; $("#newPw2").value = "";
+      btn.disabled = false;
+    } catch (err) {
+      errEl.textContent = err.message || err;
+      btn.disabled = false;
+    }
+  });
+};
+
+/* ------------------ 12. 페이지: 직원 관리 (관리자) ------------------ */
 pages.employees = function () {
   const u = currentUser();
   if (u.role !== "admin") return navigate("home");
@@ -718,7 +829,7 @@ pages.employees = function () {
 
   $("#mainContent").innerHTML = `
     <h2 class="page-title">직원 관리</h2>
-    <p class="page-sub">직원을 추가하거나 전체 직원의 연차 현황을 확인합니다.</p>
+    <p class="page-sub">직원을 추가하거나 수정하고, 전체 연차 현황을 확인합니다.</p>
     <div class="card">
       <div class="toolbar">
         <h3 style="margin:0;">직원 목록 (${list.length}명)</h3>
@@ -727,11 +838,12 @@ pages.employees = function () {
       <table>
         <thead>
           <tr>
-            <th>사번</th><th>이름</th><th>부서</th><th>직급</th>
+            <th>아이디</th><th>이름</th><th>부서</th><th>직급</th>
             <th>입사일</th><th>권한</th>
-            <th style="text-align:right;">올해 부여</th>
+            <th style="text-align:right;">부여</th>
             <th style="text-align:right;">사용</th>
             <th style="text-align:right;">잔여</th>
+            <th style="text-align:right;">관리</th>
           </tr>
         </thead>
         <tbody>
@@ -747,6 +859,10 @@ pages.employees = function () {
               <td style="text-align:right;">${bal.granted}일</td>
               <td style="text-align:right;">${bal.used}일</td>
               <td style="text-align:right;"><strong>${bal.remaining}일</strong></td>
+              <td style="text-align:right; white-space:nowrap;">
+                <button class="btn ghost xs" data-edit="${escapeHtml(e.empNo)}">수정</button>
+                <button class="btn ghost xs" data-reset="${escapeHtml(e.empNo)}">비번 리셋</button>
+              </td>
             </tr>`;
           }).join("")}
         </tbody>
@@ -754,6 +870,12 @@ pages.employees = function () {
     </div>
   `;
   $("#openAddEmp").addEventListener("click", openAddEmployeeModal);
+  $$("button[data-edit]").forEach((btn) => {
+    btn.addEventListener("click", () => openEditEmployeeModal(btn.dataset.edit));
+  });
+  $$("button[data-reset]").forEach((btn) => {
+    btn.addEventListener("click", () => openResetPwModal(btn.dataset.reset));
+  });
 };
 
 function openAddEmployeeModal() {
@@ -761,7 +883,7 @@ function openAddEmployeeModal() {
     <h3>신규 직원 추가</h3>
     <form id="addEmpForm">
       <div class="form-row">
-        <div class="form-group"><label>사번 *</label><input id="newEmpNo" required placeholder="예: 2026001" /></div>
+        <div class="form-group"><label>아이디 *</label><input id="newU" required placeholder="예: hong" autocomplete="off" /></div>
         <div class="form-group"><label>이름 *</label><input id="newName" required /></div>
       </div>
       <div class="form-row">
@@ -795,8 +917,8 @@ function openAddEmployeeModal() {
     const btn = $("#saveEmp");
     btn.disabled = true;
     try {
-      const empNo = $("#newEmpNo").value.trim();
-      if (Store.getEmployee(empNo)) throw new Error("이미 존재하는 사번입니다.");
+      const empNo = $("#newU").value.trim();
+      if (Store.getEmployee(empNo)) throw new Error("이미 존재하는 아이디입니다.");
       const pw = $("#newPw").value;
       if (pw.length < 4) throw new Error("비밀번호는 최소 4자 이상이어야 합니다.");
 
@@ -818,9 +940,126 @@ function openAddEmployeeModal() {
     }
   });
 }
+
+function openEditEmployeeModal(empNo) {
+  const emp = Store.getEmployee(empNo);
+  if (!emp) return alert("직원 정보를 찾을 수 없습니다.");
+
+  $("#modalBody").innerHTML = `
+    <h3>직원 정보 수정 — ${escapeHtml(emp.name)}</h3>
+    <form id="editEmpForm">
+      <div class="form-row">
+        <div class="form-group">
+          <label>아이디 *</label>
+          <input id="edU" required value="${escapeHtml(emp.empNo)}" />
+          <div class="hint">변경 시 본인 로그인 정보가 즉시 바뀝니다.</div>
+        </div>
+        <div class="form-group"><label>이름 *</label><input id="edName" required value="${escapeHtml(emp.name)}" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>이메일</label><input id="edEmail" type="email" value="${escapeHtml(emp.email || '')}" /></div>
+        <div class="form-group"><label>입사일 *</label><input id="edHire" type="date" required value="${emp.hireDate}" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>부서</label><input id="edDept" value="${escapeHtml(emp.department || '')}" /></div>
+        <div class="form-group"><label>직급</label><input id="edPos" value="${escapeHtml(emp.position || '')}" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>권한 *</label>
+          <select id="edRole">
+            <option value="employee" ${emp.role === "employee" ? "selected" : ""}>일반 직원</option>
+            <option value="admin" ${emp.role === "admin" ? "selected" : ""}>관리자</option>
+          </select>
+        </div>
+        <div class="form-group"></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn ghost" id="closeModal">취소</button>
+        <button type="submit" class="btn green" id="saveEdit">저장</button>
+      </div>
+    </form>
+  `;
+  $("#modalBackdrop").classList.add("active");
+  $("#closeModal").addEventListener("click", closeModal);
+
+  $("#editEmpForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#saveEdit");
+    btn.disabled = true;
+    try {
+      const newU = $("#edU").value.trim();
+      if (!newU) throw new Error("아이디를 입력해 주세요.");
+      if (newU !== emp.empNo && Store.getEmployee(newU)) throw new Error("이미 사용 중인 아이디입니다.");
+
+      const patch = {
+        name: $("#edName").value.trim(),
+        email: $("#edEmail").value.trim() || null,
+        hireDate: $("#edHire").value,
+        department: $("#edDept").value.trim() || null,
+        position: $("#edPos").value.trim() || null,
+        role: $("#edRole").value,
+      };
+      if (newU !== emp.empNo) patch.empNo = newU;
+
+      await Store.updateEmployee(emp.empNo, patch);
+
+      // 본인이 본인을 수정하고 아이디가 바뀌었으면 세션도 갱신
+      const cur = currentUser();
+      if (cur && cur.empNo === emp.empNo && newU !== emp.empNo) {
+        Store.setSession(newU);
+      }
+      closeModal();
+      navigate("employees");
+    } catch (err) {
+      alert("저장 실패: " + (err.message || err));
+      btn.disabled = false;
+    }
+  });
+}
+
+function openResetPwModal(empNo) {
+  const emp = Store.getEmployee(empNo);
+  if (!emp) return alert("직원 정보를 찾을 수 없습니다.");
+
+  $("#modalBody").innerHTML = `
+    <h3>비밀번호 리셋 — ${escapeHtml(emp.name)}</h3>
+    <p class="page-sub">이 직원의 비밀번호를 새 값으로 덮어씁니다.</p>
+    <form id="resetPwForm">
+      <div class="form-group">
+        <label>새 비밀번호 *</label>
+        <input id="rsPw" type="text" required placeholder="최소 4자" />
+        <div class="hint">직원에게 안전하게 전달하고 첫 로그인 후 변경하도록 안내하세요.</div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn ghost" id="closeModal">취소</button>
+        <button type="submit" class="btn danger" id="saveReset">비밀번호 변경</button>
+      </div>
+    </form>
+  `;
+  $("#modalBackdrop").classList.add("active");
+  $("#closeModal").addEventListener("click", closeModal);
+
+  $("#resetPwForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#saveReset");
+    btn.disabled = true;
+    try {
+      const pw = $("#rsPw").value;
+      if (pw.length < 4) throw new Error("비밀번호는 최소 4자 이상이어야 합니다.");
+      await Store.updateEmployeePassword(emp.empNo, await hashPassword(pw));
+      closeModal();
+      alert(`${emp.name}님의 비밀번호가 변경되었습니다.`);
+    } catch (err) {
+      alert("실패: " + (err.message || err));
+      btn.disabled = false;
+    }
+  });
+}
+
 function closeModal() { $("#modalBackdrop").classList.remove("active"); }
 
-/* ------------------ 12. 페이지: 승인 관리 (관리자) ------------------ */
+/* ------------------ 13. 페이지: 승인 관리 ------------------ */
 pages.approvals = function () {
   const u = currentUser();
   if (u.role !== "admin") return navigate("home");
@@ -870,7 +1109,7 @@ pages.approvals = function () {
   });
 };
 
-/* ------------------ 13. 공통: 신청 테이블 ------------------ */
+/* ------------------ 14. 공통: 신청 테이블 ------------------ */
 function renderRequestTable(reqs, opts) {
   const { showEmp, showActions } = opts || {};
   return `<table>
@@ -910,16 +1149,16 @@ function renderRequestTable(reqs, opts) {
     </tbody></table>`;
 }
 
-/* ------------------ 14. 이벤트 바인딩 ------------------ */
+/* ------------------ 15. 이벤트 바인딩 ------------------ */
 $("#loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const btn = $("#loginBtn");
   btn.disabled = true;
   $("#loginErr").textContent = "";
   try {
-    const empNo = $("#loginEmpNo").value.trim();
+    const username = $("#loginUsername").value.trim();
     const pw = $("#loginPw").value;
-    const res = await login(empNo, pw);
+    const res = await login(username, pw);
     if (!res.ok) {
       $("#loginErr").textContent = res.msg;
       btn.disabled = false;
@@ -939,7 +1178,7 @@ $("#setupForm").addEventListener("submit", async (e) => {
     const pw = $("#setupPw").value;
     if (pw.length < 4) throw new Error("비밀번호는 최소 4자 이상");
     const emp = {
-      empNo: $("#setupEmpNo").value.trim(),
+      empNo: $("#setupUsername").value.trim(),
       name: $("#setupName").value.trim(),
       email: $("#setupEmail").value.trim() || null,
       hireDate: $("#setupHire").value,
@@ -969,7 +1208,7 @@ $("#modalBackdrop").addEventListener("click", (e) => {
   if (e.target.id === "modalBackdrop") closeModal();
 });
 
-/* ------------------ 15. 부팅 ------------------ */
+/* ------------------ 16. 부팅 ------------------ */
 (async function init() {
   showBoot();
   try {
@@ -980,13 +1219,12 @@ $("#modalBackdrop").addEventListener("click", (e) => {
         <div style="max-width:500px; padding:24px; background:white; color:var(--gray-800); border-radius:12px;">
           <h2 style="margin-top:0; color:var(--red-500);">Supabase 연결 실패</h2>
           <p>${escapeHtml(e.message || e)}</p>
-          <p style="font-size:12px; color:var(--gray-600);">URL/Key 가 정확한지, Supabase 프로젝트가 활성 상태인지 확인해 주세요.</p>
+          <p style="font-size:12px; color:var(--gray-600);">DB 마이그레이션(emp_no → username)이 아직 실행되지 않은 경우 이 오류가 납니다. supabase_migration_v2.sql 을 Supabase SQL Editor에서 실행해 주세요.</p>
         </div>
       </div>`;
     return;
   }
 
-  // 직원이 한 명도 없으면 초기 관리자 설정
   if (Store.getEmployees().length === 0) {
     showSetup();
     return;
