@@ -1841,10 +1841,12 @@ function renderDayAttendanceModal(dateStr) {
   const wdNames = ["일","월","화","수","목","금","토"];
   const wd = wdNames[d.getDay()];
 
-  const leavesHtml = leaves.length === 0 ? "" : `
+  // 관리자: 모든 연차/반차 표시. 직원: 본인 신청만 표시 (중복 신청 방지 + 본인 현황 확인)
+  const visibleLeaves = isAdmin ? leaves : leaves.filter(r => r.empNo === cu.empNo);
+  const leavesHtml = visibleLeaves.length === 0 ? "" : `
     <div style="margin-bottom:18px;">
-      <div style="font-size:12px; color:var(--gray-600); font-weight:600; margin-bottom:8px;">연차 · 반차 (${leaves.length}건)</div>
-      <div style="border:1px solid var(--gray-200); border-radius:8px; overflow:hidden;">${leaves.map(r => renderLeaveRowHtml(r)).join("")}</div>
+      <div style="font-size:12px; color:var(--gray-600); font-weight:600; margin-bottom:8px;">${isAdmin ? "연차 · 반차" : "내 신청"} (${visibleLeaves.length}건)</div>
+      <div style="border:1px solid var(--gray-200); border-radius:8px; overflow:hidden;">${visibleLeaves.map(r => renderLeaveRowHtml(r)).join("")}</div>
     </div>`;
 
   const recordsHtml = records.length === 0 ? "" : `
@@ -1854,7 +1856,7 @@ function renderDayAttendanceModal(dateStr) {
     </div>`;
 
   // 위 섹션이 하나라도 있으면 추가 폼 위에 구분선
-  const addFormStyle = (leaves.length || records.length) ? "border-top:1px solid var(--gray-200); padding-top:18px;" : "";
+  const addFormStyle = (visibleLeaves.length || records.length) ? "border-top:1px solid var(--gray-200); padding-top:18px;" : "";
 
   $("#modalBody").innerHTML = `
     <h3>${dateStr} (${wd}) 일정</h3>
