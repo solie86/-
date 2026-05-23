@@ -231,7 +231,8 @@
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     color: white; font-weight: 600;
   }
-  .cal-evt.pending { background: #5b8def; color: white; }
+  .cal-evt.pending { background: transparent; color: var(--gray-800); padding-left: 2px; }
+  .cal-evt.pending::before { content: "●"; color: #5b8def; margin-right: 2px; font-size: 10px; }
   .cal-evt.approved { background: var(--green-500); }
   .cal-evt.approved-half { background: var(--yellow-500); color: #5a4710; }
   /* 근태 이벤트 (관리자만 표시) — 연차와 시각적으로 구분되도록 어두운 배색 */
@@ -931,17 +932,6 @@ pages.home = function () {
         </div>
       </div>
       <div id="calGrid"></div>
-      <div class="cal-legend">
-        <span><i style="background:var(--green-500);"></i>연차</span>
-        <span><i style="background:var(--yellow-500);"></i>반차</span>
-        <span><i style="background:#5b8def;"></i>승인 대기</span>
-        ${u.role === "admin" ? `
-          <span><i style="background:#ef6b6b;"></i>지각</span>
-          <span><i style="background:var(--red-500);"></i>결근</span>
-          <span><i style="background:#b39ddb;"></i>병가</span>
-          <span><i style="background:var(--gray-400);"></i>기타</span>
-        ` : ""}
-      </div>
     </div>
 
     ${myPending.length ? `
@@ -1752,7 +1742,7 @@ function renderLeaveRowHtml(r) {
   }
 
   return `
-    <div style="padding:12px 14px; border-bottom:1px solid var(--gray-100); display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <div style="padding:12px 14px; border-bottom:1px solid var(--gray-100); display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; text-align:center;">
       <div style="flex:0 0 80px; font-weight:600; font-size:13.5px;">${escapeHtml(name)}</div>
       <div style="flex:0 0 70px; font-size:12.5px; color:var(--gray-600);">[${typeText}]</div>
       <div style="flex:0 0 50px;">${statusBadge}</div>
@@ -1786,7 +1776,7 @@ function renderAttRowHtml(r, employees) {
     `;
   }
   return `
-    <div style="padding:12px 14px; border-bottom:1px solid var(--gray-100); display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+    <div style="padding:12px 14px; border-bottom:1px solid var(--gray-100); display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; text-align:center;">
       <div style="flex:0 0 80px; font-weight:600; font-size:13.5px;">${escapeHtml(name)}</div>
       <div style="flex:0 0 60px;">${attTypeBadge(r.recordType)}</div>
       <div style="flex:1; min-width:120px; font-size:13px; color:var(--gray-600);">${r.note ? escapeHtml(r.note) : "—"}</div>
