@@ -666,6 +666,17 @@ const Store = {
     if (error) throw error;
     await this.refresh();
   },
+  async updateAttendance(id, patch) {
+    const row = {};
+    if ("empNo" in patch) row.username = patch.empNo;
+    if ("recordType" in patch) row.record_type = patch.recordType;
+    if ("note" in patch) row.note = patch.note;
+    if ("recordDate" in patch) row.record_date = patch.recordDate;
+    if (Object.keys(row).length === 0) return;
+    const { error } = await sb.from("attendance_records").update(row).eq("id", id);
+    if (error) throw error;
+    await this.refresh();
+  },
 
   // ----- 면담일지 CRUD -----
   async addInterviewNote(note) {
@@ -956,7 +967,7 @@ pages.home = function () {
     renderMonthCalendar();
   });
   if (u.role === "admin") {
-    $("#calAddAtt").addEventListener("click", () => openQuickAttendanceModal());
+    $("#calAddAtt").addEventListener("click", () => openDayAttendanceModal());
   }
 };
 
@@ -1067,12 +1078,11 @@ function renderMonthCalendar() {
   html += `</div>`;
   $("#calGrid").innerHTML = html;
 
-  // 관리자 — 셀 클릭 시 그 날짜로 근태 기록 모달 오픈
+  // 관리자 — 셀 클릭 시 그 날짜의 근태 기록 모달 (조회/수정/삭제/추가)
   if (isAdmin) {
     $$("#calGrid .cal-cell").forEach(cell => {
-      cell.addEventListener("click", (e) => {
-        // 이벤트 막대(.cal-evt) 클릭은 무시하고 빈 영역만 등록 흐름 (단, 클릭하면 그 날짜로 모달 오픈)
-        openQuickAttendanceModal(cell.dataset.date);
+      cell.addEventListener("click", () => {
+        openDayAttendanceModal(cell.dataset.date);
       });
     });
   }
@@ -1701,91 +1711,191 @@ function closeModal() {
   if (m) m.classList.remove("wide");
 }
 
-/* ------------------ 빠른 근태 기록 모달 (관리자 전용, 달력에서 사용) ------------------ */
-function openQuickAttendanceModal(dateStr) {
+/* ------------------ 날짜별 근태 기록 모달 (관리자 전용) ------------------
+   - 달력 셀 클릭 또는 "+ 근태 기록" 버튼 클릭 시 진입
+   - 그 날짜의 기존 기록 조회/수정/삭제 + 새 기록 추가까지 한 화면에서 처리
+*/
+let _attEditingId = null; // 현재 수정 중인 기록 id (1행씩만 인라인 편집)
+
+function openDayAttendanceModal(dateStr) {
+  const cu = currentUser();
+  if (!cu || cu.role !== "admin") return;
+  _attEditingId = null;
+  $("#modalBackdrop").classList.add("active");
+  renderDayAttendanceModal(dateStr || fmtDate(today()));
+}
+
+function renderAttRowHtml(r, employees) {
+  const emp = Store.getEmployee(r.empNo);
+  const name = emp ? emp.name : r.empNo;
+  if (_attEditingId === r.id) {
+    return `
+      <div style="padding:12px 14px; border-bottom:1px solid var(--gray-100); background:#fafbfd;">
+        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+          <select class="ed-emp" data-id="${r.id}" style="padding:6px 8px; border:1px solid var(--gray-200); border-radius:6px; font-size:13px; min-width:90px;">
+            ${employees.map(e => `<option value="${escapeHtml(e.empNo)}" ${e.empNo === r.empNo ? "selected" : ""}>${escapeHtml(e.name)}</option>`).join("")}
+          </select>
+          <select class="ed-type" data-id="${r.id}" style="padding:6px 8px; border:1px solid var(--gray-200); border-radius:6px; font-size:13px;">
+            <option value="late"   ${r.recordType === "late"   ? "selected" : ""}>지각</option>
+            <option value="absent" ${r.recordType === "absent" ? "selected" : ""}>결근</option>
+            <option value="sick"   ${r.recordType === "sick"   ? "selected" : ""}>병가</option>
+            <option value="etc"    ${r.recordType === "etc"    ? "selected" : ""}>기타</option>
+          </select>
+          <input type="text" class="ed-note" data-id="${r.id}" value="${escapeHtml(r.note || '')}" placeholder="비고" style="flex:1; min-width:120px; padding:6px 8px; border:1px solid var(--gray-200); border-radius:6px; font-size:13px;" />
+          <button class="btn green xs" data-att-action="save"   data-att-id="${r.id}">저장</button>
+          <button class="btn ghost xs" data-att-action="cancel" data-att-id="${r.id}">취소</button>
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div style="padding:12px 14px; border-bottom:1px solid var(--gray-100); display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+      <div style="flex:0 0 80px; font-weight:600; font-size:13.5px;">${escapeHtml(name)}</div>
+      <div style="flex:0 0 60px;">${attTypeBadge(r.recordType)}</div>
+      <div style="flex:1; min-width:120px; font-size:13px; color:var(--gray-600);">${r.note ? escapeHtml(r.note) : "—"}</div>
+      <button class="btn ghost xs" data-att-action="edit"   data-att-id="${r.id}">수정</button>
+      <button class="btn ghost xs" data-att-action="delete" data-att-id="${r.id}" style="color:var(--red-500);">삭제</button>
+    </div>
+  `;
+}
+
+function renderDayAttendanceModal(dateStr) {
   const cu = currentUser();
   if (!cu || cu.role !== "admin") return;
 
+  const records = Store._cache.attendance
+    .filter(a => a.recordDate === dateStr)
+    .sort((a, b) => {
+      const ae = Store.getEmployee(a.empNo);
+      const be = Store.getEmployee(b.empNo);
+      const an = ae ? ae.name : a.empNo;
+      const bn = be ? be.name : b.empNo;
+      return an.localeCompare(bn, "ko");
+    });
+
   const employees = Store.getEmployees().slice().sort((a, b) => a.name.localeCompare(b.name, "ko"));
-  const date = dateStr || fmtDate(today());
+
+  const d = parseLocalDate(dateStr);
+  const wdNames = ["일","월","화","수","목","금","토"];
+  const wd = wdNames[d.getDay()];
 
   $("#modalBody").innerHTML = `
-    <h3>+ 근태 기록</h3>
-    <form id="quickAttForm">
-      <div class="form-row">
-        <div class="form-group">
-          <label>날짜 *</label>
-          <input type="date" id="qaDate" required value="${date}" />
-        </div>
-        <div class="form-group">
-          <label>직원 *</label>
-          <select id="qaEmp" required>
-            <option value="">-- 선택 --</option>
-            ${employees.map(e => `<option value="${escapeHtml(e.empNo)}">${escapeHtml(e.name)}</option>`).join("")}
-          </select>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>유형 *</label>
-        <div style="display:flex; gap:20px; flex-wrap:wrap; padding:6px 0 2px;">
-          <label style="display:inline-flex; align-items:center; gap:6px; font-weight:500; cursor:pointer; font-size:14px; white-space:nowrap;"><input type="radio" name="qaType" value="late" checked style="margin:0;" /> 지각</label>
-          <label style="display:inline-flex; align-items:center; gap:6px; font-weight:500; cursor:pointer; font-size:14px; white-space:nowrap;"><input type="radio" name="qaType" value="absent" style="margin:0;" /> 결근</label>
-          <label style="display:inline-flex; align-items:center; gap:6px; font-weight:500; cursor:pointer; font-size:14px; white-space:nowrap;"><input type="radio" name="qaType" value="sick" style="margin:0;" /> 병가</label>
-          <label style="display:inline-flex; align-items:center; gap:6px; font-weight:500; cursor:pointer; font-size:14px; white-space:nowrap;"><input type="radio" name="qaType" value="etc" style="margin:0;" /> 기타</label>
-        </div>
-      </div>
-      <div class="form-row cols-1">
-        <div class="form-group">
-          <label>비고 <span id="qaNoteReq" style="color:var(--red-500); display:none;">*</span></label>
-          <input type="text" id="qaNote" placeholder="예: 30분 지각, 사전 연락 없음" />
-          <div class="hint" id="qaNoteHint" style="display:none;">기타 유형은 비고가 필수입니다.</div>
-        </div>
-      </div>
-      <div class="actions">
-        <button type="button" class="btn ghost" id="qaCancel">취소</button>
-        <button type="submit" class="btn green" id="qaSave">저장</button>
-      </div>
-    </form>
-  `;
-  $("#modalBackdrop").classList.add("active");
-  $("#qaCancel").addEventListener("click", closeModal);
+    <h3>${dateStr} (${wd}) 근태 기록</h3>
 
-  // 유형이 '기타'면 비고 필수 표시 ON
-  $$("input[name='qaType']").forEach(radio => {
-    radio.addEventListener("change", () => {
-      const selected = $$("input[name='qaType']").find(r => r.checked).value;
-      const isEtc = selected === "etc";
-      $("#qaNoteReq").style.display = isEtc ? "" : "none";
-      $("#qaNoteHint").style.display = isEtc ? "" : "none";
-    });
+    <div style="margin-bottom:18px;">
+      <div style="font-size:12px; color:var(--gray-600); font-weight:600; margin-bottom:8px;">이 날의 기록 (${records.length}건)</div>
+      ${records.length === 0
+        ? `<div class="empty" style="padding:18px; background:var(--gray-50); border-radius:8px; font-size:13px;">기록이 없습니다.</div>`
+        : `<div style="border:1px solid var(--gray-200); border-radius:8px; overflow:hidden;">${records.map(r => renderAttRowHtml(r, employees)).join("")}</div>`}
+    </div>
+
+    <div style="border-top:1px solid var(--gray-200); padding-top:18px;">
+      <div style="font-weight:600; font-size:13px; margin-bottom:10px;">+ 새 기록 추가</div>
+      <form id="dayAttAddForm">
+        <div class="form-row">
+          <div class="form-group">
+            <label>직원 *</label>
+            <select id="addAttEmp" required>
+              <option value="">-- 선택 --</option>
+              ${employees.map(e => `<option value="${escapeHtml(e.empNo)}">${escapeHtml(e.name)}</option>`).join("")}
+            </select>
+          </div>
+          <div class="form-group">
+            <label>유형 *</label>
+            <select id="addAttType" required>
+              <option value="late">지각</option>
+              <option value="absent">결근</option>
+              <option value="sick">병가</option>
+              <option value="etc">기타</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row cols-1">
+          <div class="form-group">
+            <label>비고 <span id="addAttNoteReq" style="color:var(--red-500); display:none;">*</span></label>
+            <input type="text" id="addAttNote" placeholder="예: 30분 지각, 사전 연락 없음" />
+            <div class="hint" id="addAttNoteHint" style="display:none;">기타 유형은 비고가 필수입니다.</div>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end;">
+          <button type="submit" class="btn green sm">+ 추가</button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  // 추가 폼: 유형 변경에 따라 비고 필수 표시 토글
+  $("#addAttType").addEventListener("change", () => {
+    const isEtc = $("#addAttType").value === "etc";
+    $("#addAttNoteReq").style.display = isEtc ? "" : "none";
+    $("#addAttNoteHint").style.display = isEtc ? "" : "none";
   });
 
-  $("#quickAttForm").addEventListener("submit", async (e) => {
+  // 추가 폼: 제출
+  $("#dayAttAddForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const btn = $("#qaSave");
-    const empNo = $("#qaEmp").value;
-    const recordType = $$("input[name='qaType']").find(r => r.checked).value;
-    const note = $("#qaNote").value.trim();
-
+    const empNo = $("#addAttEmp").value;
+    const recordType = $("#addAttType").value;
+    const note = $("#addAttNote").value.trim();
     if (!empNo) { alert("직원을 선택해 주세요."); return; }
     if (recordType === "etc" && !note) {
       alert("기타 유형은 비고를 반드시 입력해 주세요.");
       return;
     }
-    btn.disabled = true;
     try {
       await Store.addAttendance({
         empNo,
-        recordDate: $("#qaDate").value,
+        recordDate: dateStr,
         recordType,
         note: note || null,
       });
-      closeModal();
-      navigate("home"); // 달력 새로 그리기
+      renderMonthCalendar();        // 달력 갱신 (배경)
+      renderDayAttendanceModal(dateStr); // 모달 재렌더링
     } catch (err) {
-      alert("저장 실패: " + (err.message || err));
-      btn.disabled = false;
+      alert("추가 실패: " + (err.message || err));
     }
+  });
+
+  // 행 액션 버튼 (수정/저장/취소/삭제)
+  $("#modalBody").querySelectorAll("[data-att-action]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const action = btn.dataset.attAction;
+      const id = btn.dataset.attId;
+
+      if (action === "edit") {
+        _attEditingId = id;
+        renderDayAttendanceModal(dateStr);
+      } else if (action === "cancel") {
+        _attEditingId = null;
+        renderDayAttendanceModal(dateStr);
+      } else if (action === "save") {
+        const empNo      = $("#modalBody").querySelector(`.ed-emp[data-id="${id}"]`).value;
+        const recordType = $("#modalBody").querySelector(`.ed-type[data-id="${id}"]`).value;
+        const note       = $("#modalBody").querySelector(`.ed-note[data-id="${id}"]`).value.trim();
+        if (!empNo) { alert("직원을 선택해 주세요."); return; }
+        if (recordType === "etc" && !note) {
+          alert("기타 유형은 비고를 반드시 입력해 주세요.");
+          return;
+        }
+        try {
+          await Store.updateAttendance(id, { empNo, recordType, note: note || null });
+          _attEditingId = null;
+          renderMonthCalendar();
+          renderDayAttendanceModal(dateStr);
+        } catch (err) {
+          alert("저장 실패: " + (err.message || err));
+        }
+      } else if (action === "delete") {
+        if (!confirm("이 근태 기록을 삭제할까요? 되돌릴 수 없습니다.")) return;
+        try {
+          await Store.deleteAttendance(id);
+          renderMonthCalendar();
+          renderDayAttendanceModal(dateStr);
+        } catch (err) {
+          alert("삭제 실패: " + (err.message || err));
+        }
+      }
+    });
   });
 }
 
