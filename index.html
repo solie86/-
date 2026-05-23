@@ -539,7 +539,18 @@ const Store = {
     if ("status" in patch) row.status = patch.status;
     if ("approverEmpNo" in patch) row.approver_username = patch.approverEmpNo;
     if ("processedAt" in patch) row.processed_at = patch.processedAt;
+    if ("startDate" in patch) row.start_date = patch.startDate;
+    if ("endDate" in patch) row.end_date = patch.endDate;
+    if ("days" in patch) row.days = patch.days;
+    if ("halfDayPart" in patch) row.half_day_part = patch.halfDayPart;
+    if ("reason" in patch) row.reason = patch.reason;
     const { error } = await sb.from("leave_requests").update(row).eq("id", id);
+    if (error) throw error;
+    await this.refresh();
+  },
+
+  async deleteRequest(id) {
+    const { error } = await sb.from("leave_requests").delete().eq("id", id);
     if (error) throw error;
     await this.refresh();
   },
@@ -1390,6 +1401,133 @@ function openResetPwModal(empNo) {
 
 function closeModal() { $("#modalBackdrop").classList.remove("active"); }
 
+function openEditRequestModal(id) {
+  const r = Store.getRequests().find(x => x.id === id);
+  if (!r) return alert("신청 정보를 찾을 수 없습니다.");
+  const emp = Store.getEmployee(r.empNo);
+  const isHalf = Number(r.days) === 0.5;
+
+  $("#modalBody").innerHTML = `
+    <h3>신청 수정 — ${emp ? escapeHtml(emp.name) : escapeHtml(r.empNo)}</h3>
+    <form id="editReqForm">
+      <div class="form-row cols-3">
+        <div class="form-group">
+          <label>사용 단위</label>
+          <select id="erUnit">
+            <option value="1" ${!isHalf ? "selected" : ""}>연차 (1일)</option>
+            <option value="0.5" ${isHalf ? "selected" : ""}>반차 (0.5일)</option>
+          </select>
+        </div>
+        <div class="form-group" id="erHalfGroup" style="${isHalf ? "" : "display:none;"}">
+          <label>오전 / 오후</label>
+          <select id="erHalfPart">
+            <option value="AM" ${r.halfDayPart === "AM" ? "selected" : ""}>오전</option>
+            <option value="PM" ${r.halfDayPart === "PM" ? "selected" : ""}>오후</option>
+          </select>
+        </div>
+        <div class="form-group"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>날짜 *</label>
+          <input id="erDate" type="date" required value="${r.startDate}" />
+        </div>
+        <div class="form-group">
+          <label>상태</label>
+          <select id="erStatus">
+            <option value="approved" ${r.status === "approved" ? "selected" : ""}>승인</option>
+            <option value="pending" ${r.status === "pending" ? "selected" : ""}>대기 중</option>
+            <option value="rejected" ${r.status === "rejected" ? "selected" : ""}>반려</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row cols-1">
+        <div class="form-group">
+          <label>사유</label>
+          <textarea id="erReason">${escapeHtml(r.reason || "")}</textarea>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn ghost" id="closeModal">취소</button>
+        <button type="submit" class="btn green" id="saveEdReq">저장</button>
+      </div>
+    </form>
+  `;
+  $("#modalBackdrop").classList.add("active");
+  $("#closeModal").addEventListener("click", closeModal);
+
+  $("#erUnit").addEventListener("change", () => {
+    const half = $("#erUnit").value === "0.5";
+    $("#erHalfGroup").style.display = half ? "" : "none";
+  });
+
+  $("#editReqForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#saveEdReq");
+    btn.disabled = true;
+    try {
+      const unit = Number($("#erUnit").value);
+      const dateVal = $("#erDate").value;
+      if (!dateVal) throw new Error("날짜를 선택해 주세요.");
+      const halfPart = unit === 0.5 ? $("#erHalfPart").value : null;
+      const reason = $("#erReason").value.trim();
+      const status = $("#erStatus").value;
+
+      await Store.updateRequest(id, {
+        startDate: dateVal,
+        endDate: dateVal,
+        days: unit,
+        halfDayPart: halfPart,
+        reason,
+        status,
+      });
+      closeModal();
+      navigate("approvals");
+    } catch (err) {
+      alert("저장 실패: " + (err.message || err));
+      btn.disabled = false;
+    }
+  });
+}
+
+function openDeleteRequestModal(id) {
+  const r = Store.getRequests().find(x => x.id === id);
+  if (!r) return alert("신청 정보를 찾을 수 없습니다.");
+  const emp = Store.getEmployee(r.empNo);
+  const empName = emp ? emp.name : r.empNo;
+  const range = r.days === 0.5
+    ? `${r.startDate} (${r.halfDayPart === "AM" ? "오전" : "오후"} 반차)`
+    : (r.startDate === r.endDate ? r.startDate : `${r.startDate} ~ ${r.endDate}`);
+
+  $("#modalBody").innerHTML = `
+    <h3 style="color:var(--red-500);">⚠ 신청 삭제</h3>
+    <p style="font-size:13px; color:var(--gray-600); line-height:1.6;">
+      아래 신청을 완전히 삭제합니다. 되돌릴 수 없습니다.
+    </p>
+    <div style="background:var(--gray-50); padding:10px 14px; border-radius:8px; margin: 10px 0 14px; font-size:13px; line-height:1.7;">
+      <strong>${escapeHtml(empName)}</strong> · ${range} · ${r.days}일<br/>
+      사유: ${escapeHtml(r.reason || "-")}
+    </div>
+    <div class="actions">
+      <button type="button" class="btn ghost" id="closeModal">취소</button>
+      <button type="button" class="btn danger" id="confirmDelReq">영구 삭제</button>
+    </div>
+  `;
+  $("#modalBackdrop").classList.add("active");
+  $("#closeModal").addEventListener("click", closeModal);
+  $("#confirmDelReq").addEventListener("click", async () => {
+    $("#confirmDelReq").disabled = true;
+    try {
+      await Store.deleteRequest(id);
+      closeModal();
+      navigate("approvals");
+    } catch (err) {
+      alert("삭제 실패: " + (err.message || err));
+      $("#confirmDelReq").disabled = false;
+    }
+  });
+}
+
 /* ------------------ 13. 페이지: 승인 관리 ------------------ */
 pages.approvals = function () {
   const u = currentUser();
@@ -1407,9 +1545,16 @@ pages.approvals = function () {
     </div>
     <div class="card">
       <h3>처리 완료 내역 (${processed.length}건)</h3>
-      ${processed.length ? renderRequestTable(processed, { showEmp: true, showActions: false }) : `<div class="empty">처리된 내역이 없습니다.</div>`}
+      ${processed.length ? renderRequestTable(processed, { showEmp: true, showActions: false, showEdit: true }) : `<div class="empty">처리된 내역이 없습니다.</div>`}
     </div>
   `;
+
+  $$("button[data-edit-req]").forEach((btn) => {
+    btn.addEventListener("click", () => openEditRequestModal(btn.dataset.editReq));
+  });
+  $$("button[data-del-req]").forEach((btn) => {
+    btn.addEventListener("click", () => openDeleteRequestModal(btn.dataset.delReq));
+  });
 
   $$("button[data-act]").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -1442,13 +1587,15 @@ pages.approvals = function () {
 
 /* ------------------ 14. 공통: 신청 테이블 ------------------ */
 function renderRequestTable(reqs, opts) {
-  const { showEmp, showActions } = opts || {};
+  const { showEmp, showActions, showEdit } = opts || {};
   return `<table>
     <thead><tr>
       <th>신청일</th>
       ${showEmp ? "<th>신청자</th>" : ""}
       <th>기간</th><th>일수</th><th>사유</th><th>상태</th>
-      ${showActions ? "<th style='text-align:right;'>처리</th>" : "<th>처리일</th>"}
+      ${showActions ? "<th style='text-align:right;'>처리</th>"
+        : showEdit ? "<th>처리일</th><th style='text-align:right;'>관리</th>"
+        : "<th>처리일</th>"}
     </tr></thead>
     <tbody>
     ${reqs.map((r) => {
@@ -1461,12 +1608,23 @@ function renderRequestTable(reqs, opts) {
       else if (r.status === "approved" && r.days === 0.5) badge = `<span class="badge approved-half">반차 승인</span>`;
       else if (r.status === "approved") badge = `<span class="badge approved">승인</span>`;
       else if (r.status === "rejected") badge = `<span class="badge rejected">반려</span>`;
-      const lastCol = showActions
-        ? `<td style="text-align:right;">
+
+      let lastCol;
+      if (showActions) {
+        lastCol = `<td style="text-align:right;">
              <button class="btn green sm" data-act="approve" data-id="${r.id}">승인</button>
              <button class="btn danger sm" data-act="reject"  data-id="${r.id}">반려</button>
-           </td>`
-        : `<td>${r.processedAt ? fmtDate(r.processedAt) : "-"}</td>`;
+           </td>`;
+      } else if (showEdit) {
+        lastCol = `<td>${r.processedAt ? fmtDate(r.processedAt) : "-"}</td>
+           <td style="text-align:right; white-space:nowrap;">
+             <button class="btn ghost xs" data-edit-req="${r.id}">수정</button>
+             <button class="btn ghost xs" style="color:var(--red-500);" data-del-req="${r.id}">삭제</button>
+           </td>`;
+      } else {
+        lastCol = `<td>${r.processedAt ? fmtDate(r.processedAt) : "-"}</td>`;
+      }
+
       return `<tr>
         <td>${fmtDate(r.requestedAt)}</td>
         ${showEmp ? `<td>${emp ? escapeHtml(emp.name) : escapeHtml(r.empNo)} <span style="color:var(--gray-400);font-size:11px;">(${escapeHtml(r.empNo)})</span></td>` : ""}
