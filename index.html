@@ -1075,7 +1075,7 @@ pages.employees = function () {
       <table>
         <thead>
           <tr>
-            <th>아이디</th><th>이름</th>
+            <th>이름</th>
             <th>입사일</th><th>권한</th>
             <th style="text-align:right;">부여</th>
             <th style="text-align:right;">사용</th>
@@ -1087,7 +1087,6 @@ pages.employees = function () {
           ${list.map((e) => {
             const bal = calcBalance(e);
             return `<tr>
-              <td>${escapeHtml(e.empNo)}</td>
               <td>${escapeHtml(e.name)}</td>
               <td>${e.hireDate}</td>
               <td><span class="badge role ${e.role === "admin" ? "admin" : ""}">${e.role === "admin" ? "관리자" : "직원"}</span></td>
@@ -1097,7 +1096,6 @@ pages.employees = function () {
               <td style="text-align:right; white-space:nowrap;">
                 <button class="btn ghost xs" data-edit="${escapeHtml(e.empNo)}">수정</button>
                 <button class="btn ghost xs" data-adjust="${escapeHtml(e.empNo)}">잔여조정</button>
-                <button class="btn ghost xs" data-reset="${escapeHtml(e.empNo)}">비번리셋</button>
                 <button class="btn ghost xs" style="color:var(--red-500);" data-delete="${escapeHtml(e.empNo)}">삭제</button>
               </td>
             </tr>`;
@@ -1109,9 +1107,6 @@ pages.employees = function () {
   $("#openAddEmp").addEventListener("click", openAddEmployeeModal);
   $$("button[data-edit]").forEach((btn) => {
     btn.addEventListener("click", () => openEditEmployeeModal(btn.dataset.edit));
-  });
-  $$("button[data-reset]").forEach((btn) => {
-    btn.addEventListener("click", () => openResetPwModal(btn.dataset.reset));
   });
   $$("button[data-adjust]").forEach((btn) => {
     btn.addEventListener("click", () => openAdjustBalanceModal(btn.dataset.adjust));
