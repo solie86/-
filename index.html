@@ -823,6 +823,7 @@ pages.myLeave = function () {
   const u = currentUser();
   const bal = calcBalance(u);
   const myReqs = Store.getRequestsByEmp(u.empNo);
+  const myPending = myReqs.filter(r => r.status === "pending");
 
   $("#mainContent").innerHTML = `
     <h2 class="page-title">내 연차</h2>
@@ -832,6 +833,14 @@ pages.myLeave = function () {
       <div class="stat-card yellow"><div class="label">사용</div><div class="value">${bal.used}<span class="unit">일</span></div></div>
       <div class="stat-card green"><div class="label">잔여</div><div class="value">${bal.remaining}<span class="unit">일</span></div></div>
     </div>
+
+    ${myPending.length ? `
+    <div class="card" style="margin-top:18px;">
+      <h3>승인 대기 중인 신청 (${myPending.length}건)</h3>
+      <p style="font-size:12px; color:var(--gray-600); margin: 0 0 12px;">관리자 승인 전까지 직접 수정할 수 있습니다.</p>
+      ${renderRequestTable(myPending, { showEmp: false, showActions: false, showSelfEdit: true })}
+    </div>` : ""}
+
     <div class="card" style="margin-top:18px;">
       <div class="toolbar">
         <h3 style="margin:0;">내 신청 내역</h3>
@@ -841,6 +850,12 @@ pages.myLeave = function () {
     </div>
   `;
   $("#goApply").addEventListener("click", () => navigate("apply"));
+
+  // 본인 대기 신청 수정 — 상태 변경 옵션 숨김
+  $$("button[data-self-edit]").forEach((btn) => {
+    btn.addEventListener("click", () => openEditRequestModal(btn.dataset.selfEdit, { hideStatus: true }));
+  });
+
   bindRequestRowClicks();
 };
 
@@ -1457,11 +1472,22 @@ function openRequestDetailModal(id) {
   $("#closeModal").addEventListener("click", closeModal);
 }
 
-function openEditRequestModal(id) {
+function openEditRequestModal(id, opts) {
+  const { hideStatus = false } = opts || {};
   const r = Store.getRequests().find(x => x.id === id);
   if (!r) return alert("신청 정보를 찾을 수 없습니다.");
   const emp = Store.getEmployee(r.empNo);
   const isHalf = Number(r.days) === 0.5;
+
+  const statusBlock = hideStatus ? `<div class="form-group"></div>` : `
+        <div class="form-group">
+          <label>상태</label>
+          <select id="erStatus">
+            <option value="approved" ${r.status === "approved" ? "selected" : ""}>승인</option>
+            <option value="pending" ${r.status === "pending" ? "selected" : ""}>대기 중</option>
+            <option value="rejected" ${r.status === "rejected" ? "selected" : ""}>반려</option>
+          </select>
+        </div>`;
 
   $("#modalBody").innerHTML = `
     <h3>신청 수정 — ${emp ? escapeHtml(emp.name) : escapeHtml(r.empNo)}</h3>
@@ -1488,14 +1514,7 @@ function openEditRequestModal(id) {
           <label>날짜 *</label>
           <input id="erDate" type="date" required value="${r.startDate}" />
         </div>
-        <div class="form-group">
-          <label>상태</label>
-          <select id="erStatus">
-            <option value="approved" ${r.status === "approved" ? "selected" : ""}>승인</option>
-            <option value="pending" ${r.status === "pending" ? "selected" : ""}>대기 중</option>
-            <option value="rejected" ${r.status === "rejected" ? "selected" : ""}>반려</option>
-          </select>
-        </div>
+        ${statusBlock}
       </div>
       <div class="form-row cols-1">
         <div class="form-group">
@@ -1527,18 +1546,23 @@ function openEditRequestModal(id) {
       if (!dateVal) throw new Error("날짜를 선택해 주세요.");
       const halfPart = unit === 0.5 ? $("#erHalfPart").value : null;
       const reason = $("#erReason").value.trim();
-      const status = $("#erStatus").value;
 
-      await Store.updateRequest(id, {
+      const patch = {
         startDate: dateVal,
         endDate: dateVal,
         days: unit,
         halfDayPart: halfPart,
         reason,
-        status,
-      });
+      };
+      // 상태 select가 있는 경우(관리자)만 status 함께 변경
+      const statusEl = $("#erStatus");
+      if (statusEl) patch.status = statusEl.value;
+
+      await Store.updateRequest(id, patch);
       closeModal();
-      navigate("approvals");
+      // 현재 페이지를 새로고침 (myLeave에서 수정했으면 myLeave로, approvals에서 수정했으면 approvals로)
+      const activeBtn = document.querySelector("#nav button.active");
+      navigate(activeBtn ? activeBtn.dataset.page : "myLeave");
     } catch (err) {
       alert("저장 실패: " + (err.message || err));
       btn.disabled = false;
@@ -1644,13 +1668,14 @@ pages.approvals = function () {
 
 /* ------------------ 14. 공통: 신청 테이블 ------------------ */
 function renderRequestTable(reqs, opts) {
-  const { showEmp, showActions, showEdit } = opts || {};
+  const { showEmp, showActions, showEdit, showSelfEdit } = opts || {};
   return `<table>
     <thead><tr>
       <th>신청일</th>
       ${showEmp ? "<th>신청자</th>" : ""}
       <th>기간</th><th>일수</th><th>상태</th>
       ${showActions ? "<th style='text-align:right;'>처리</th>"
+        : showSelfEdit ? "<th style='text-align:right;'>관리</th>"
         : showEdit ? "<th>처리일</th><th style='text-align:right;'>관리</th>"
         : "<th>처리일</th>"}
     </tr></thead>
@@ -1670,6 +1695,12 @@ function renderRequestTable(reqs, opts) {
              <span class="actions-cell">
                <button class="btn green sm" data-act="approve" data-id="${r.id}">승인</button>
                <button class="btn danger sm" data-act="reject"  data-id="${r.id}">반려</button>
+             </span>
+           </td>`;
+      } else if (showSelfEdit) {
+        lastCol = `<td style="text-align:right;">
+             <span class="actions-cell">
+               <button class="btn ghost xs" data-self-edit="${r.id}">수정</button>
              </span>
            </td>`;
       } else if (showEdit) {
