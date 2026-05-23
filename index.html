@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>사내 연차 관리 시스템</title>
+
+<!-- Supabase JS Client (CDN) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+  /* ============================================================
+     디자인 토큰 — 화이트 / 네이비 / 그린 포인트
+     ============================================================ */
+  :root {
+    --navy-900: #0f1f3d;
+    --navy-700: #1e3a5f;
+    --navy-500: #345078;
+    --green-500: #2f9e6b;
+    --green-600: #237a52;
+    --yellow-500: #e4b53a;
+    --gray-50:  #f6f7fb;
+    --gray-100: #eceff5;
+    --gray-200: #dfe3eb;
+    --gray-400: #9aa3b2;
+    --gray-600: #555f72;
+    --gray-800: #232a36;
+    --red-500: #d44a4a;
+    --white: #ffffff;
+    --shadow-sm: 0 1px 2px rgba(15,31,61,0.06);
+    --shadow-md: 0 4px 16px rgba(15,31,61,0.08);
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Noto Sans KR",
+                 "Apple SD Gothic Neo", "Segoe UI", Roboto, sans-serif;
+    background: var(--gray-50);
+    color: var(--gray-800);
+    line-height: 1.5;
+    font-size: 14px;
+  }
+  button { font-family: inherit; cursor: pointer; }
+  input, select, textarea { font-family: inherit; font-size: 14px; }
+  a { color: inherit; text-decoration: none; }
+
+  /* ============================================================
+     로딩 화면
+     ============================================================ */
+  .boot-wrap {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--navy-900), var(--navy-500));
+    color: white;
+    font-size: 14px;
+  }
+  .boot-wrap .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid rgba(255,255,255,0.25);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 14px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ============================================================
+     로그인 / 초기 설정
+     ============================================================ */
+  .login-wrap {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, var(--navy-900), var(--navy-500));
+    padding: 24px;
+  }
+  .login-card {
+    width: 100%; max-width: 420px;
+    background: var(--white);
+    border-radius: 16px;
+    padding: 36px 32px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+  }
+  .login-card h1 { margin: 0 0 6px; font-size: 22px; color: var(--navy-900); }
+  .login-card .sub { margin: 0 0 24px; color: var(--gray-600); font-size: 13px; }
+  .login-card label {
+    display: block; margin: 12px 0 4px;
+    font-size: 12px; color: var(--gray-600); font-weight: 600;
+  }
+  .login-card input, .login-card select {
+    width: 100%; padding: 11px 13px;
+    border: 1px solid var(--gray-200); border-radius: 8px;
+    outline: none; transition: border-color .15s;
+  }
+  .login-card input:focus, .login-card select:focus { border-color: var(--navy-500); }
+  .login-card .btn-primary {
+    width: 100%; margin-top: 18px; padding: 12px;
+    background: var(--navy-900); color: var(--white);
+    border: none; border-radius: 8px;
+    font-weight: 600; font-size: 14px;
+  }
+  .login-card .btn-primary:hover { background: var(--navy-700); }
+  .login-card .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+  .login-card .err {
+    margin-top: 12px; color: var(--red-500); font-size: 12px; min-height: 16px;
+  }
+  .login-card .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  /* ============================================================
+     앱 레이아웃
+     ============================================================ */
+  .app { display: none; min-height: 100vh; }
+  .app.active { display: flex; }
+  .sidebar {
+    width: 220px; background: var(--navy-900); color: var(--white);
+    padding: 24px 0; display: flex; flex-direction: column; flex-shrink: 0;
+  }
+  .sidebar .brand { padding: 0 22px 18px; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 16px; }
+  .sidebar .brand h2 { margin: 0; font-size: 16px; font-weight: 700; }
+  .sidebar .brand p { margin: 4px 0 0; font-size: 11px; color: rgba(255,255,255,0.55); }
+  .sidebar nav { flex: 1; padding: 0 12px; }
+  .sidebar nav button {
+    display: block; width: 100%; text-align: left;
+    background: transparent; color: rgba(255,255,255,0.78);
+    border: none; padding: 11px 14px; border-radius: 8px;
+    font-size: 13px; margin-bottom: 2px;
+    transition: background .15s, color .15s;
+  }
+  .sidebar nav button:hover { background: rgba(255,255,255,0.06); color: var(--white); }
+  .sidebar nav button.active { background: var(--green-500); color: var(--white); font-weight: 600; }
+  .sidebar nav .section {
+    margin: 14px 14px 6px;
+    font-size: 10px; color: rgba(255,255,255,0.4);
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .sidebar .user-box {
+    padding: 14px 22px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 12px;
+  }
+  .sidebar .user-box .name { font-weight: 600; }
+  .sidebar .user-box .role { color: rgba(255,255,255,0.55); margin-top: 2px; }
+  .sidebar .user-box button {
+    margin-top: 8px; width: 100%;
+    background: transparent; color: rgba(255,255,255,0.7);
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: 6px; border-radius: 6px; font-size: 12px;
+  }
+  .sidebar .user-box button:hover { background: rgba(255,255,255,0.06); }
+
+  .main { flex: 1; padding: 28px 36px; overflow-x: auto; }
+  .page-title { font-size: 22px; font-weight: 700; color: var(--navy-900); margin: 0 0 4px; }
+  .page-sub { color: var(--gray-600); font-size: 13px; margin: 0 0 24px; }
+
+  /* 공통 카드/통계/버튼/폼/테이블/뱃지 */
+  .card { background: var(--white); border-radius: var(--radius); box-shadow: var(--shadow-sm); padding: 22px; margin-bottom: 18px; }
+  .card h3 { margin: 0 0 14px; font-size: 15px; color: var(--navy-900); }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .stat-card {
+    background: var(--white); border-radius: var(--radius);
+    padding: 18px 20px; box-shadow: var(--shadow-sm);
+    border-left: 4px solid var(--navy-500);
+  }
+  .stat-card.green { border-left-color: var(--green-500); }
+  .stat-card.yellow { border-left-color: var(--yellow-500); }
+  .stat-card .label { color: var(--gray-600); font-size: 12px; margin-bottom: 6px; }
+  .stat-card .value { font-size: 26px; font-weight: 700; color: var(--navy-900); }
+  .stat-card .unit { font-size: 13px; color: var(--gray-600); font-weight: 500; margin-left: 4px; }
+
+  .btn { background: var(--navy-900); color: var(--white); border: none; padding: 9px 16px; border-radius: 7px; font-size: 13px; font-weight: 600; }
+  .btn:hover { background: var(--navy-700); }
+  .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn.ghost { background: transparent; color: var(--navy-700); border: 1px solid var(--gray-200); }
+  .btn.ghost:hover { background: var(--gray-50); }
+  .btn.green { background: var(--green-500); }
+  .btn.green:hover { background: var(--green-600); }
+  .btn.danger { background: var(--red-500); }
+  .btn.danger:hover { background: #b53b3b; }
+  .btn.sm { padding: 6px 11px; font-size: 12px; }
+
+  .form-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 12px; }
+  .form-row.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .form-row.cols-1 { grid-template-columns: 1fr; }
+  .form-group label { display: block; font-size: 12px; color: var(--gray-600); font-weight: 600; margin-bottom: 4px; }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: 9px 11px;
+    border: 1px solid var(--gray-200); border-radius: 7px;
+    outline: none; background: var(--white);
+  }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--navy-500); }
+  .form-group textarea { resize: vertical; min-height: 70px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table th, table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--gray-100); }
+  table th { color: var(--gray-600); font-weight: 600; background: var(--gray-50); font-size: 12px; }
+  table tbody tr:hover { background: var(--gray-50); }
+
+  .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .badge.pending { background: #e9ecf2; color: var(--gray-600); }
+  .badge.approved { background: #e3f4ec; color: var(--green-600); }
+  .badge.approved-half { background: #fcf3d5; color: #8a6a14; }
+  .badge.rejected { background: #fbe4e4; color: #a73838; }
+  .badge.role { background: var(--gray-100); color: var(--navy-700); }
+  .badge.role.admin { background: #e3edff; color: var(--navy-700); }
+
+  .info-banner { background: #eff5ff; border: 1px solid #d6e4ff; color: var(--navy-700); padding: 10px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 16px; }
+  .err-banner { background: #fdebeb; border: 1px solid #f5c6c6; color: #8b2929; padding: 10px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 16px; }
+  .empty { padding: 32px; text-align: center; color: var(--gray-400); font-size: 13px; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
+
+  /* 반응형 */
+  @media (max-width: 768px) {
+    .app.active { flex-direction: column; }
+    .sidebar { width: 100%; flex-direction: row; align-items: center; padding: 12px 14px; overflow-x: auto; }
+    .sidebar .brand { border-bottom: none; padding: 0 12px 0 0; margin-bottom: 0; flex-shrink: 0; border-right: 1px solid rgba(255,255,255,0.1); margin-right: 8px; }
+    .sidebar nav { display: flex; padding: 0; gap: 4px; flex: 1; }
+    .sidebar nav .section { display: none; }
+    .sidebar nav button { white-space: nowrap; padding: 8px 12px; }
+    .sidebar .user-box { border-top: none; padding: 0 8px; flex-shrink: 0; }
+    .sidebar .user-box .role { display: none; }
+    .sidebar .user-box button { margin-top: 0; padding: 6px 10px; }
+    .main { padding: 18px 16px; }
+    .grid-3 { grid-template-columns: 1fr; }
+    .form-row, .form-row.cols-3 { grid-template-columns: 1fr; }
+    table { font-size: 12px; }
+    table th, table td { padding: 8px 6px; }
+  }
+
+  /* 모달 */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(15,31,61,0.45); display: none; align-items: center; justify-content: center; z-index: 100; padding: 18px; }
+  .modal-backdrop.active { display: flex; }
+  .modal { background: var(--white); border-radius: 12px; padding: 24px; width: 100%; max-width: 460px; box-shadow: var(--shadow-md); }
+  .modal h3 { margin: 0 0 14px; color: var(--navy-900); }
+  .modal .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<!-- 부팅 화면 -->
+<div id="bootScreen" class="boot-wrap">
+  <div class="spinner"></div>
+  <div>시스템을 불러오는 중입니다...</div>
+</div>
+
+<!-- 초기 관리자 설정 -->
+<div id="setupScreen" class="login-wrap" style="display:none;">
+  <div class="login-card">
+    <h1>최초 관리자 등록</h1>
+    <p class="sub">이 시스템을 처음 사용합니다. 첫 관리자 계정을 만들어 주세요.</p>
+    <form id="setupForm">
+      <div class="row-2">
+        <div>
+          <label>사번 *</label>
+          <input id="setupEmpNo" required placeholder="예: admin" />
+        </div>
+        <div>
+          <label>이름 *</label>
+          <input id="setupName" required placeholder="예: 홍길동" />
+        </div>
+      </div>
+      <label>이메일</label>
+      <input id="setupEmail" type="email" placeholder="예: admin@whrcompany.com" />
+      <div class="row-2">
+        <div>
+          <label>입사일 *</label>
+          <input id="setupHire" type="date" required />
+        </div>
+        <div>
+          <label>비밀번호 *</label>
+          <input id="setupPw" type="password" required placeholder="최소 4자" />
+        </div>
+      </div>
+      <button type="submit" class="btn-primary">관리자 계정 만들기</button>
+      <div class="err" id="setupErr"></div>
+    </form>
+  </div>
+</div>
+
+<!-- 로그인 -->
+<div id="loginScreen" class="login-wrap" style="display:none;">
+  <div class="login-card">
+    <h1>사내 연차 관리 시스템</h1>
+    <p class="sub">사번과 비밀번호로 로그인해 주세요.</p>
+    <form id="loginForm">
+      <label for="loginEmpNo">사번</label>
+      <input id="loginEmpNo" type="text" autocomplete="username" required />
+      <label for="loginPw">비밀번호</label>
+      <input id="loginPw" type="password" autocomplete="current-password" required />
+      <button type="submit" class="btn-primary" id="loginBtn">로그인</button>
+      <div class="err" id="loginErr"></div>
+    </form>
+  </div>
+</div>
+
+<!-- 앱 -->
+<div id="app" class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <h2>연차 관리</h2>
+      <p>HR Leave System</p>
+    </div>
+    <nav id="nav">
+      <div class="section">메뉴</div>
+      <button data-page="home">홈</button>
+      <button data-page="myLeave">내 연차</button>
+      <button data-page="apply">연차 신청</button>
+      <div class="section admin-only">관리자</div>
+      <button data-page="employees" class="admin-only">직원 관리</button>
+      <button data-page="approvals" class="admin-only">승인 관리</button>
+    </nav>
+    <div class="user-box">
+      <div class="name" id="userName">-</div>
+      <div class="role" id="userRole">-</div>
+      <button id="logoutBtn">로그아웃</button>
+    </div>
+  </aside>
+  <main class="main" id="mainContent"></main>
+</div>
+
+<!-- 모달 -->
+<div id="modalBackdrop" class="modal-backdrop">
+  <div class="modal" id="modalBody"></div>
+</div>
+
+<script>
+/* ==================================================================
+   사내 연차 관리 시스템 — Supabase 연동 버전
+   - 데이터: Supabase (PostgreSQL)
+   - 인증: 사번 + 비밀번호 (SHA-256 해시, employees 테이블)
+   - 세션 유지: localStorage (브라우저별)
+   ================================================================== */
+
+/* ------------------ 0. Supabase 연결 ------------------ */
+const SUPABASE_URL = "https://ndfboobqkgdkieitskgo.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kZmJvb2Jxa2dka2llaXRza2dvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0NjgyNjEsImV4cCI6MjA5NTA0NDI2MX0.LV4ZVD5Re-_A9uA3hioWPdIDGGitkJmKkwlRVvmm250";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+/* ------------------ 1. 유틸 ------------------ */
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+const fmtDate = (d) => {
+  if (!d) return "-";
+  if (!(d instanceof Date)) d = new Date(d);
+  const yy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+};
+const today = () => new Date();
+
+async function hashPassword(pw) {
+  const enc = new TextEncoder();
+  const buf = await crypto.subtle.digest("SHA-256", enc.encode(pw));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/* ------------------ 2. DB ↔ JS 필드 변환 (snake_case ↔ camelCase) ------------------ */
+const dbToEmp = (r) => r && ({
+  empNo: r.emp_no, name: r.name, email: r.email,
+  hireDate: r.hire_date, position: r.position, department: r.department,
+  passwordHash: r.password_hash, role: r.role,
+});
+const empToDb = (e) => ({
+  emp_no: e.empNo, name: e.name, email: e.email,
+  hire_date: e.hireDate, position: e.position, department: e.department,
+  password_hash: e.passwordHash, role: e.role,
+});
+const dbToReq = (r) => r && ({
+  id: r.id, empNo: r.emp_no, requestedAt: r.requested_at,
+  startDate: r.start_date, endDate: r.end_date,
+  days: Number(r.days), halfDayPart: r.half_day_part,
+  reason: r.reason, status: r.status,
+  approverEmpNo: r.approver_emp_no, processedAt: r.processed_at,
+});
+const dbToPolicy = (r) => r ? ({
+  monthlyAccrual: Number(r.monthly_accrual),
+  yearOneBulk: Number(r.year_one_bulk),
+  allowPastDate: r.allow_past_date,
+}) : { monthlyAccrual: 1, yearOneBulk: 15, allowPastDate: true };
+
+/* ------------------ 3. 저장 모듈 (Supabase) ------------------
+   - 읽기: refresh() 후 캐시에서 동기 접근
+   - 쓰기: 비동기로 DB에 반영 후 자동 refresh()
+   ----------------------------------------------------------- */
+const Store = {
+  _cache: { employees: [], requests: [], policy: null },
+
+  async refresh() {
+    const [empsRes, reqsRes, polRes] = await Promise.all([
+      sb.from("employees").select("*").order("emp_no"),
+      sb.from("leave_requests").select("*").order("requested_at", { ascending: false }),
+      sb.from("policy").select("*").eq("id", 1).maybeSingle(),
+    ]);
+    if (empsRes.error) throw empsRes.error;
+    if (reqsRes.error) throw reqsRes.error;
+    if (polRes.error) throw polRes.error;
+    this._cache.employees = (empsRes.data || []).map(dbToEmp);
+    this._cache.requests  = (reqsRes.data  || []).map(dbToReq);
+    this._cache.policy    = dbToPolicy(polRes.data);
+  },
+
+  // 동기 읽기
+  getEmployees() { return this._cache.employees; },
+  getEmployee(empNo) { return this._cache.employees.find((e) => e.empNo === empNo); },
+  getRequests() { return this._cache.requests; },
+  getRequestsByEmp(empNo) { return this._cache.requests.filter((r) => r.empNo === empNo); },
+  getPolicy() { return this._cache.policy; },
+
+  // 비동기 쓰기
+  async addEmployee(emp) {
+    const { error } = await sb.from("employees").insert(empToDb(emp));
+    if (error) throw error;
+    await this.refresh();
+  },
+  async addRequest(req) {
+    const row = {
+      emp_no: req.empNo,
+      start_date: req.startDate,
+      end_date: req.endDate,
+      days: req.days,
+      half_day_part: req.halfDayPart,
+      reason: req.reason,
+      status: "pending",
+    };
+    const { error } = await sb.from("leave_requests").insert(row);
+    if (error) throw error;
+    await this.refresh();
+  },
+  async updateRequest(id, patch) {
+    const row = {};
+    if ("status" in patch) row.status = patch.status;
+    if ("approverEmpNo" in patch) row.approver_emp_no = patch.approverEmpNo;
+    if ("processedAt" in patch) row.processed_at = patch.processedAt;
+    const { error } = await sb.from("leave_requests").update(row).eq("id", id);
+    if (error) throw error;
+    await this.refresh();
+  },
+
+  // 세션 (브라우저 로컬)
+  setSession(empNo) { localStorage.setItem("leave_session_v2", empNo); },
+  getSession() {
+    const s = localStorage.getItem("leave_session_v2");
+    return s ? { empNo: s } : null;
+  },
+  clearSession() { localStorage.removeItem("leave_session_v2"); },
+};
+
+/* ------------------ 4. 연차 발생 계산 로직 ------------------ */
+function calcGrantedForYear(emp, year, asOf = today()) {
+  const policy = Store.getPolicy();
+  const hireDate = new Date(emp.hireDate);
+  const yearEnd = new Date(year, 11, 31, 23, 59, 59);
+  const ref = asOf < yearEnd ? asOf : yearEnd;
+  if (hireDate > new Date(year, 11, 31)) return 0;
+
+  let granted = 0;
+  for (let m = 0; m < 12; m++) {
+    const eventDate = new Date(year, m, 1);
+    if (eventDate > ref) break;
+    const prevMonthStart = new Date(year, m - 1, 1);
+    if (hireDate <= prevMonthStart) granted += policy.monthlyAccrual;
+  }
+  const oneYearAnniv = new Date(hireDate);
+  oneYearAnniv.setFullYear(oneYearAnniv.getFullYear() + 1);
+  if (oneYearAnniv.getFullYear() === year && oneYearAnniv <= ref) {
+    granted += policy.yearOneBulk;
+  }
+  return granted;
+}
+function calcUsedForYear(empNo, year) {
+  return Store.getRequests()
+    .filter((r) => r.empNo === empNo && r.status === "approved")
+    .filter((r) => new Date(r.startDate).getFullYear() === year)
+    .reduce((sum, r) => sum + Number(r.days || 0), 0);
+}
+function calcBalance(emp, year = today().getFullYear()) {
+  const granted = calcGrantedForYear(emp, year);
+  const used = calcUsedForYear(emp.empNo, year);
+  return { granted, used, remaining: Math.max(0, granted - used) };
+}
+
+/* ------------------ 5. 인증 ------------------ */
+async function login(empNo, pw) {
+  await Store.refresh();
+  const emp = Store.getEmployee(empNo);
+  if (!emp) return { ok: false, msg: "사번을 찾을 수 없습니다." };
+  const h = await hashPassword(pw);
+  if (h !== emp.passwordHash) return { ok: false, msg: "비밀번호가 올바르지 않습니다." };
+  Store.setSession(empNo);
+  return { ok: true, emp };
+}
+function currentUser() {
+  const s = Store.getSession();
+  return s ? Store.getEmployee(s.empNo) : null;
+}
+
+/* ------------------ 6. 화면 전환 ------------------ */
+function hideAllScreens() {
+  $("#bootScreen").style.display = "none";
+  $("#setupScreen").style.display = "none";
+  $("#loginScreen").style.display = "none";
+  $("#app").classList.remove("active");
+}
+function showBoot()  { hideAllScreens(); $("#bootScreen").style.display  = "flex"; }
+function showSetup(){ hideAllScreens(); $("#setupScreen").style.display = "flex"; }
+function showLogin(){ hideAllScreens(); $("#loginScreen").style.display = "flex"; $("#loginEmpNo").value=""; $("#loginPw").value=""; $("#loginErr").textContent=""; }
+function showApp(){
+  hideAllScreens();
+  $("#app").classList.add("active");
+  const u = currentUser();
+  $("#userName").textContent = u.name + " (" + u.empNo + ")";
+  $("#userRole").textContent = u.role === "admin" ? "관리자" : "일반 직원";
+  $$(".admin-only").forEach((el) => el.style.display = u.role === "admin" ? "" : "none");
+  navigate("home");
+}
+
+/* ------------------ 7. 라우팅 ------------------ */
+const pages = {};
+async function navigate(page) {
+  $$("#nav button").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
+  const u = currentUser();
+  if (!u) return;
+  if (["employees", "approvals"].includes(page) && u.role !== "admin") page = "home";
+
+  $("#mainContent").innerHTML = `<div class="empty"><div class="spinner" style="display:inline-block; width:18px; height:18px; border:2px solid var(--gray-200); border-top-color: var(--navy-500); border-radius:50%; animation: spin .8s linear infinite; vertical-align:middle; margin-right:8px;"></div>불러오는 중…</div>`;
+  try {
+    await Store.refresh();
+  } catch (e) {
+    $("#mainContent").innerHTML = `<div class="err-banner">데이터 불러오기 실패: ${escapeHtml(e.message || e)}</div>`;
+    return;
+  }
+  const fn = pages[page] || pages.home;
+  $("#mainContent").innerHTML = "";
+  fn();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+/* ------------------ 8. 페이지: 홈 ------------------ */
+pages.home = function () {
+  const u = currentUser();
+  const bal = calcBalance(u);
+  const myPending = Store.getRequestsByEmp(u.empNo).filter((r) => r.status === "pending");
+
+  let adminBlock = "";
+  if (u.role === "admin") {
+    const allPending = Store.getRequests().filter((r) => r.status === "pending").length;
+    const approvedThisYear = Store.getRequests().filter(
+      (r) => r.status === "approved" && new Date(r.startDate).getFullYear() === today().getFullYear()
+    ).length;
+    adminBlock = `
+      <div class="card">
+        <h3>관리자 요약</h3>
+        <div class="grid-3">
+          <div class="stat-card"><div class="label">전체 직원 수</div><div class="value">${Store.getEmployees().length}<span class="unit">명</span></div></div>
+          <div class="stat-card yellow"><div class="label">승인 대기 중인 신청</div><div class="value">${allPending}<span class="unit">건</span></div></div>
+          <div class="stat-card green"><div class="label">올해 승인된 신청</div><div class="value">${approvedThisYear}<span class="unit">건</span></div></div>
+        </div>
+      </div>`;
+  }
+
+  $("#mainContent").innerHTML = `
+    <h2 class="page-title">안녕하세요, ${escapeHtml(u.name)}님</h2>
+    <p class="page-sub">${today().getFullYear()}년 연차 현황을 확인하세요.</p>
+    <div class="grid-3">
+      <div class="stat-card"><div class="label">올해 부여 연차</div><div class="value">${bal.granted}<span class="unit">일</span></div></div>
+      <div class="stat-card yellow"><div class="label">사용 연차</div><div class="value">${bal.used}<span class="unit">일</span></div></div>
+      <div class="stat-card green"><div class="label">잔여 연차</div><div class="value">${bal.remaining}<span class="unit">일</span></div></div>
+    </div>
+    ${myPending.length ? `
+      <div class="card" style="margin-top:18px;">
+        <h3>승인 대기 중인 내 신청 (${myPending.length}건)</h3>
+        ${renderRequestTable(myPending, { showEmp: false, showActions: false })}
+      </div>` : ""}
+    ${adminBlock}
+  `;
+};
+
+/* ------------------ 9. 페이지: 내 연차 ------------------ */
+pages.myLeave = function () {
+  const u = currentUser();
+  const bal = calcBalance(u);
+  const myReqs = Store.getRequestsByEmp(u.empNo);
+
+  $("#mainContent").innerHTML = `
+    <h2 class="page-title">내 연차</h2>
+    <p class="page-sub">올해(${today().getFullYear()}년) 기준 부여·사용·잔여 연차와 신청 내역입니다.</p>
+    <div class="grid-3">
+      <div class="stat-card"><div class="label">부여</div><div class="value">${bal.granted}<span class="unit">일</span></div></div>
+      <div class="stat-card yellow"><div class="label">사용</div><div class="value">${bal.used}<span class="unit">일</span></div></div>
+      <div class="stat-card green"><div class="label">잔여</div><div class="value">${bal.remaining}<span class="unit">일</span></div></div>
+    </div>
+    <div class="card" style="margin-top:18px;">
+      <div class="toolbar">
+        <h3 style="margin:0;">내 신청 내역</h3>
+        <button class="btn green sm" id="goApply">+ 새 연차 신청</button>
+      </div>
+      ${myReqs.length ? renderRequestTable(myReqs, { showEmp: false, showActions: false }) : `<div class="empty">신청 내역이 없습니다.</div>`}
+    </div>
+  `;
+  $("#goApply").addEventListener("click", () => navigate("apply"));
+};
+
+/* ------------------ 10. 페이지: 연차 신청 ------------------ */
+pages.apply = function () {
+  const u = currentUser();
+  const bal = calcBalance(u);
+  const policy = Store.getPolicy();
+  const todayStr = fmtDate(today());
+
+  $("#mainContent").innerHTML = `
+    <h2 class="page-title">연차 신청</h2>
+    <p class="page-sub">신청 후 관리자 승인을 거치면 사용 연차에 반영됩니다.</p>
+    <div class="info-banner">현재 잔여 연차 <strong>${bal.remaining}일</strong> · 되도록 빠른 신청을 권장합니다.</div>
+    <div class="card">
+      <h3>신청서 작성</h3>
+      <form id="applyForm">
+        <div class="form-row cols-3">
+          <div class="form-group">
+            <label>사용 단위</label>
+            <select id="unit" required>
+              <option value="1">연차 (1일)</option>
+              <option value="0.5">반차 (0.5일)</option>
+            </select>
+          </div>
+          <div class="form-group" id="halfGroup" style="display:none;">
+            <label>오전 / 오후</label>
+            <select id="halfPart">
+              <option value="AM">오전</option>
+              <option value="PM">오후</option>
+            </select>
+          </div>
+          <div class="form-group"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>시작일</label>
+            <input type="date" id="startDate" required ${policy.allowPastDate ? "" : `min="${todayStr}"`} />
+          </div>
+          <div class="form-group" id="endGroup">
+            <label>종료일</label>
+            <input type="date" id="endDate" required ${policy.allowPastDate ? "" : `min="${todayStr}"`} />
+          </div>
+        </div>
+        <div class="form-row cols-1">
+          <div class="form-group">
+            <label>사유</label>
+            <textarea id="reason" placeholder="예: 개인 사유" required></textarea>
+          </div>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button type="button" class="btn ghost" id="cancelApply">취소</button>
+          <button type="submit" class="btn green" id="submitApply">신청하기</button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  const unitSel = $("#unit");
+  const halfGroup = $("#halfGroup");
+  const endGroup = $("#endGroup");
+  unitSel.addEventListener("change", () => {
+    const half = unitSel.value === "0.5";
+    halfGroup.style.display = half ? "" : "none";
+    endGroup.style.display = half ? "none" : "";
+  });
+
+  $("#cancelApply").addEventListener("click", () => navigate("myLeave"));
+
+  $("#applyForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const submitBtn = $("#submitApply");
+    submitBtn.disabled = true;
+    try {
+      const unit = Number(unitSel.value);
+      const start = $("#startDate").value;
+      let end = unit === 0.5 ? start : $("#endDate").value;
+      const halfPart = unit === 0.5 ? $("#halfPart").value : null;
+      const reason = $("#reason").value.trim();
+
+      if (!start || !end) throw new Error("날짜를 입력해 주세요.");
+      if (new Date(end) < new Date(start)) throw new Error("종료일이 시작일보다 빠를 수 없습니다.");
+
+      let days;
+      if (unit === 0.5) days = 0.5;
+      else {
+        const ms = new Date(end) - new Date(start);
+        days = Math.round(ms / 86400000) + 1;
+      }
+
+      const bal2 = calcBalance(u);
+      if (days > bal2.remaining) throw new Error(`잔여 연차(${bal2.remaining}일)보다 많이 신청할 수 없습니다.`);
+
+      await Store.addRequest({
+        empNo: u.empNo,
+        startDate: start,
+        endDate: end,
+        days,
+        halfDayPart: halfPart,
+        reason,
+      });
+
+      alert("신청이 등록되었습니다. 관리자 승인을 기다려 주세요.");
+      navigate("myLeave");
+    } catch (err) {
+      alert("신청 실패: " + (err.message || err));
+      submitBtn.disabled = false;
+    }
+  });
+};
+
+/* ------------------ 11. 페이지: 직원 관리 (관리자) ------------------ */
+pages.employees = function () {
+  const u = currentUser();
+  if (u.role !== "admin") return navigate("home");
+  const list = Store.getEmployees();
+
+  $("#mainContent").innerHTML = `
+    <h2 class="page-title">직원 관리</h2>
+    <p class="page-sub">직원을 추가하거나 전체 직원의 연차 현황을 확인합니다.</p>
+    <div class="card">
+      <div class="toolbar">
+        <h3 style="margin:0;">직원 목록 (${list.length}명)</h3>
+        <button class="btn green sm" id="openAddEmp">+ 신규 직원 추가</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>사번</th><th>이름</th><th>부서</th><th>직급</th>
+            <th>입사일</th><th>권한</th>
+            <th style="text-align:right;">올해 부여</th>
+            <th style="text-align:right;">사용</th>
+            <th style="text-align:right;">잔여</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${list.map((e) => {
+            const bal = calcBalance(e);
+            return `<tr>
+              <td>${escapeHtml(e.empNo)}</td>
+              <td>${escapeHtml(e.name)}</td>
+              <td>${escapeHtml(e.department || "-")}</td>
+              <td>${escapeHtml(e.position || "-")}</td>
+              <td>${e.hireDate}</td>
+              <td><span class="badge role ${e.role === "admin" ? "admin" : ""}">${e.role === "admin" ? "관리자" : "직원"}</span></td>
+              <td style="text-align:right;">${bal.granted}일</td>
+              <td style="text-align:right;">${bal.used}일</td>
+              <td style="text-align:right;"><strong>${bal.remaining}일</strong></td>
+            </tr>`;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+  $("#openAddEmp").addEventListener("click", openAddEmployeeModal);
+};
+
+function openAddEmployeeModal() {
+  $("#modalBody").innerHTML = `
+    <h3>신규 직원 추가</h3>
+    <form id="addEmpForm">
+      <div class="form-row">
+        <div class="form-group"><label>사번 *</label><input id="newEmpNo" required placeholder="예: 2026001" /></div>
+        <div class="form-group"><label>이름 *</label><input id="newName" required /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>이메일</label><input id="newEmail" type="email" /></div>
+        <div class="form-group"><label>입사일 *</label><input id="newHire" type="date" required /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>부서</label><input id="newDept" placeholder="예: 개발팀" /></div>
+        <div class="form-group"><label>직급</label><input id="newPos" placeholder="예: 사원" /></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>권한 *</label>
+          <select id="newRole">
+            <option value="employee">일반 직원</option>
+            <option value="admin">관리자</option>
+          </select>
+        </div>
+        <div class="form-group"><label>초기 비밀번호 *</label><input id="newPw" type="text" required placeholder="최소 4자" /></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn ghost" id="closeModal">취소</button>
+        <button type="submit" class="btn green" id="saveEmp">추가</button>
+      </div>
+    </form>
+  `;
+  $("#modalBackdrop").classList.add("active");
+  $("#closeModal").addEventListener("click", closeModal);
+  $("#addEmpForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#saveEmp");
+    btn.disabled = true;
+    try {
+      const empNo = $("#newEmpNo").value.trim();
+      if (Store.getEmployee(empNo)) throw new Error("이미 존재하는 사번입니다.");
+      const pw = $("#newPw").value;
+      if (pw.length < 4) throw new Error("비밀번호는 최소 4자 이상이어야 합니다.");
+
+      await Store.addEmployee({
+        empNo,
+        name: $("#newName").value.trim(),
+        email: $("#newEmail").value.trim() || null,
+        hireDate: $("#newHire").value,
+        department: $("#newDept").value.trim() || null,
+        position: $("#newPos").value.trim() || null,
+        role: $("#newRole").value,
+        passwordHash: await hashPassword(pw),
+      });
+      closeModal();
+      navigate("employees");
+    } catch (err) {
+      alert("추가 실패: " + (err.message || err));
+      btn.disabled = false;
+    }
+  });
+}
+function closeModal() { $("#modalBackdrop").classList.remove("active"); }
+
+/* ------------------ 12. 페이지: 승인 관리 (관리자) ------------------ */
+pages.approvals = function () {
+  const u = currentUser();
+  if (u.role !== "admin") return navigate("home");
+  const all = Store.getRequests();
+  const pendings = all.filter((r) => r.status === "pending");
+  const processed = all.filter((r) => r.status !== "pending");
+
+  $("#mainContent").innerHTML = `
+    <h2 class="page-title">승인 관리</h2>
+    <p class="page-sub">대기 중인 신청을 승인하거나 반려합니다.</p>
+    <div class="card">
+      <h3>승인 대기 (${pendings.length}건)</h3>
+      ${pendings.length ? renderRequestTable(pendings, { showEmp: true, showActions: true }) : `<div class="empty">대기 중인 신청이 없습니다.</div>`}
+    </div>
+    <div class="card">
+      <h3>처리 완료 내역 (${processed.length}건)</h3>
+      ${processed.length ? renderRequestTable(processed, { showEmp: true, showActions: false }) : `<div class="empty">처리된 내역이 없습니다.</div>`}
+    </div>
+  `;
+
+  $$("button[data-act]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.id;
+      const act = btn.dataset.act;
+      const r = Store.getRequests().find((x) => x.id === id);
+      if (!r) return;
+      btn.disabled = true;
+      try {
+        if (act === "approve") {
+          const emp = Store.getEmployee(r.empNo);
+          const bal = calcBalance(emp);
+          if (r.days > bal.remaining) {
+            if (!confirm(`현재 잔여(${bal.remaining}일)보다 신청 일수(${r.days}일)가 많습니다. 그래도 승인할까요?`)) {
+              btn.disabled = false; return;
+            }
+          }
+          await Store.updateRequest(id, { status: "approved", approverEmpNo: u.empNo, processedAt: new Date().toISOString() });
+        } else if (act === "reject") {
+          await Store.updateRequest(id, { status: "rejected", approverEmpNo: u.empNo, processedAt: new Date().toISOString() });
+        }
+        navigate("approvals");
+      } catch (err) {
+        alert("처리 실패: " + (err.message || err));
+        btn.disabled = false;
+      }
+    });
+  });
+};
+
+/* ------------------ 13. 공통: 신청 테이블 ------------------ */
+function renderRequestTable(reqs, opts) {
+  const { showEmp, showActions } = opts || {};
+  return `<table>
+    <thead><tr>
+      <th>신청일</th>
+      ${showEmp ? "<th>신청자</th>" : ""}
+      <th>기간</th><th>일수</th><th>사유</th><th>상태</th>
+      ${showActions ? "<th style='text-align:right;'>처리</th>" : "<th>처리일</th>"}
+    </tr></thead>
+    <tbody>
+    ${reqs.map((r) => {
+      const emp = Store.getEmployee(r.empNo);
+      const range = r.days === 0.5
+        ? `${r.startDate} (${r.halfDayPart === "AM" ? "오전" : "오후"} 반차)`
+        : (r.startDate === r.endDate ? r.startDate : `${r.startDate} ~ ${r.endDate}`);
+      let badge = "";
+      if (r.status === "pending") badge = `<span class="badge pending">대기 중</span>`;
+      else if (r.status === "approved" && r.days === 0.5) badge = `<span class="badge approved-half">반차 승인</span>`;
+      else if (r.status === "approved") badge = `<span class="badge approved">승인</span>`;
+      else if (r.status === "rejected") badge = `<span class="badge rejected">반려</span>`;
+      const lastCol = showActions
+        ? `<td style="text-align:right;">
+             <button class="btn green sm" data-act="approve" data-id="${r.id}">승인</button>
+             <button class="btn danger sm" data-act="reject"  data-id="${r.id}">반려</button>
+           </td>`
+        : `<td>${r.processedAt ? fmtDate(r.processedAt) : "-"}</td>`;
+      return `<tr>
+        <td>${fmtDate(r.requestedAt)}</td>
+        ${showEmp ? `<td>${emp ? escapeHtml(emp.name) : escapeHtml(r.empNo)} <span style="color:var(--gray-400);font-size:11px;">(${escapeHtml(r.empNo)})</span></td>` : ""}
+        <td>${range}</td>
+        <td>${r.days}일</td>
+        <td style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(r.reason || "")}">${escapeHtml(r.reason || "-")}</td>
+        <td>${badge}</td>
+        ${lastCol}
+      </tr>`;
+    }).join("")}
+    </tbody></table>`;
+}
+
+/* ------------------ 14. 이벤트 바인딩 ------------------ */
+$("#loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = $("#loginBtn");
+  btn.disabled = true;
+  $("#loginErr").textContent = "";
+  try {
+    const empNo = $("#loginEmpNo").value.trim();
+    const pw = $("#loginPw").value;
+    const res = await login(empNo, pw);
+    if (!res.ok) {
+      $("#loginErr").textContent = res.msg;
+      btn.disabled = false;
+      return;
+    }
+    showApp();
+  } catch (err) {
+    $("#loginErr").textContent = "오류: " + (err.message || err);
+    btn.disabled = false;
+  }
+});
+
+$("#setupForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("#setupErr").textContent = "";
+  try {
+    const pw = $("#setupPw").value;
+    if (pw.length < 4) throw new Error("비밀번호는 최소 4자 이상");
+    const emp = {
+      empNo: $("#setupEmpNo").value.trim(),
+      name: $("#setupName").value.trim(),
+      email: $("#setupEmail").value.trim() || null,
+      hireDate: $("#setupHire").value,
+      position: "관리자",
+      department: "관리부",
+      role: "admin",
+      passwordHash: await hashPassword(pw),
+    };
+    await Store.addEmployee(emp);
+    Store.setSession(emp.empNo);
+    showApp();
+  } catch (err) {
+    $("#setupErr").textContent = "오류: " + (err.message || err);
+  }
+});
+
+$("#logoutBtn").addEventListener("click", () => {
+  Store.clearSession();
+  showLogin();
+});
+
+$$("#nav button").forEach((btn) => {
+  btn.addEventListener("click", () => navigate(btn.dataset.page));
+});
+
+$("#modalBackdrop").addEventListener("click", (e) => {
+  if (e.target.id === "modalBackdrop") closeModal();
+});
+
+/* ------------------ 15. 부팅 ------------------ */
+(async function init() {
+  showBoot();
+  try {
+    await Store.refresh();
+  } catch (e) {
+    document.body.innerHTML = `
+      <div class="boot-wrap">
+        <div style="max-width:500px; padding:24px; background:white; color:var(--gray-800); border-radius:12px;">
+          <h2 style="margin-top:0; color:var(--red-500);">Supabase 연결 실패</h2>
+          <p>${escapeHtml(e.message || e)}</p>
+          <p style="font-size:12px; color:var(--gray-600);">URL/Key 가 정확한지, Supabase 프로젝트가 활성 상태인지 확인해 주세요.</p>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // 직원이 한 명도 없으면 초기 관리자 설정
+  if (Store.getEmployees().length === 0) {
+    showSetup();
+    return;
+  }
+
+  const s = Store.getSession();
+  if (s && Store.getEmployee(s.empNo)) {
+    showApp();
+  } else {
+    showLogin();
+  }
+})();
+</script>
+</body>
+</html>
