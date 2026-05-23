@@ -162,7 +162,7 @@
 
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   table th, table td { text-align: left; padding: 14px 14px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
-  table th { color: var(--gray-600); font-weight: 600; background: var(--gray-50); font-size: 12.5px; letter-spacing: 0.02em; }
+  table th { color: var(--gray-600); font-weight: 600; background: var(--gray-50); font-size: 12.5px; letter-spacing: 0.02em; text-align: center !important; }
   table tbody tr:hover { background: var(--gray-50); }
   table tbody tr.req-row { cursor: pointer; }
   table tbody tr.req-row:hover { background: #eef3ff; }
@@ -1657,9 +1657,7 @@ function renderRequestTable(reqs, opts) {
     <tbody>
     ${reqs.map((r) => {
       const emp = Store.getEmployee(r.empNo);
-      const range = r.days === 0.5
-        ? `${r.startDate} (${r.halfDayPart === "AM" ? "오전" : "오후"} 반차)`
-        : (r.startDate === r.endDate ? r.startDate : `${r.startDate} ~ ${r.endDate}`);
+      const range = r.startDate === r.endDate ? r.startDate : `${r.startDate} ~ ${r.endDate}`;
       let badge = "";
       if (r.status === "pending") badge = `<span class="badge pending">대기</span>`;
       else if (r.status === "approved" && r.days === 0.5) badge = `<span class="badge approved-half">승인</span>`;
