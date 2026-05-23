@@ -1645,6 +1645,8 @@ function openEmployeeDetailModal(empNo, initialTab) {
 
 function renderEmployeeInfoTab(empNo) {
   const emp = Store.getEmployee(empNo);
+  const cur = currentUser();
+  const isAdmin = cur && cur.role === "admin";
 
   const row = (lbl, val) => `<div class="info-row"><div class="lbl">${lbl}</div><div class="val">${val}</div></div>`;
 
@@ -1659,7 +1661,15 @@ function renderEmployeeInfoTab(empNo) {
       ${row("부서", emp.department ? escapeHtml(emp.department) : `<span style="color:var(--gray-400);">미입력</span>`)}
       ${row("직급", emp.position ? escapeHtml(emp.position) : `<span style="color:var(--gray-400);">미입력</span>`)}
     </div>
+    ${isAdmin ? `
+      <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+        <button class="btn ghost sm" id="infoEdit">정보 수정</button>
+      </div>` : ""}
   `;
+
+  if (isAdmin) {
+    $("#infoEdit").addEventListener("click", () => { closeModal(); openEditEmployeeModal(empNo); });
+  }
 }
 
 function attTypeLabel(t) {
@@ -1709,8 +1719,6 @@ function renderAttendanceTab(empNo) {
 
     ${isAdmin ? `
       <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
-        <button class="btn ghost sm" id="detailEdit">정보 수정</button>
-        <button class="btn ghost sm" id="detailResetPw">비밀번호 리셋</button>
         <button class="btn ghost sm" id="detailAdjust">잔여 조정</button>
       </div>` : ""}
 
@@ -1767,9 +1775,7 @@ function renderAttendanceTab(empNo) {
   `;
 
   if (isAdmin) {
-    // 상단 단축 버튼 (기본정보에서 이전)
-    $("#detailEdit").addEventListener("click", () => { closeModal(); openEditEmployeeModal(empNo); });
-    $("#detailResetPw").addEventListener("click", () => { closeModal(); openResetPwModal(empNo); });
+    // 잔여 조정 단축 버튼
     $("#detailAdjust").addEventListener("click", () => { closeModal(); openAdjustBalanceModal(empNo); });
 
     $("#addAttForm").addEventListener("submit", async (e) => {
