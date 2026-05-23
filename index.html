@@ -1526,6 +1526,10 @@ function openEditEmployeeModal(empNo) {
           </select>
         </div>
       </div>
+      <div class="form-row">
+        <div class="form-group"><label>직급</label><input id="edPosition" type="text" value="${escapeHtml(emp.position || '')}" placeholder="예: 매니저, 사원, 팀장" autocomplete="off" /></div>
+        <div class="form-group"></div>
+      </div>
       <div class="actions">
         <button type="button" class="btn ghost" id="closeModal">취소</button>
         <button type="submit" class="btn green" id="saveEdit">저장</button>
@@ -1555,6 +1559,7 @@ function openEditEmployeeModal(empNo) {
         phone,
         hireDate: $("#edHire").value,
         role: $("#edRole").value,
+        position: $("#edPosition").value.trim() || null,
       };
       if (newU !== emp.empNo) patch.empNo = newU;
 
