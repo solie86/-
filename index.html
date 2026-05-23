@@ -939,7 +939,7 @@ pages.home = function () {
     ${myPending.length ? `
       <div class="card" style="margin-top:18px;">
         <h3>승인 대기 중인 내 신청 (${myPending.length}건)</h3>
-        ${renderRequestTable(myPending, { showEmp: false, showActions: false })}
+        ${renderRequestTable(myPending, { showEmp: false, showActions: false, hideProcessed: true })}
       </div>` : ""}
     ${adminBlock}
   `;
@@ -2615,7 +2615,7 @@ pages.approvals = function () {
 
 /* ------------------ 14. 공통: 신청 테이블 ------------------ */
 function renderRequestTable(reqs, opts) {
-  const { showEmp, showActions, showEdit, showSelfEdit } = opts || {};
+  const { showEmp, showActions, showEdit, showSelfEdit, hideProcessed } = opts || {};
   return `<table>
     <thead><tr>
       <th>신청일</th>
@@ -2624,6 +2624,7 @@ function renderRequestTable(reqs, opts) {
       ${showActions ? "<th style=''>처리</th>"
         : showSelfEdit ? "<th style=''>관리</th>"
         : showEdit ? "<th>처리일</th><th>처리자</th><th style=''>관리</th>"
+        : hideProcessed ? ""
         : "<th>처리일</th>"}
     </tr></thead>
     <tbody>
@@ -2661,6 +2662,8 @@ function renderRequestTable(reqs, opts) {
                <button class="btn ghost xs" style="color:var(--red-500);" data-del-req="${r.id}">삭제</button>
              </span>
            </td>`;
+      } else if (hideProcessed) {
+        lastCol = "";
       } else {
         lastCol = `<td>${r.processedAt ? fmtDate(r.processedAt) : "-"}</td>`;
       }
