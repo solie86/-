@@ -686,13 +686,11 @@ pages.apply = function () {
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>시작일</label>
-            <input type="date" id="startDate" required ${policy.allowPastDate ? "" : `min="${todayStr}"`} />
+            <label>신청 날짜</label>
+            <input type="date" id="leaveDate" required ${policy.allowPastDate ? "" : `min="${todayStr}"`} />
+            <div class="hint">한 번에 하루씩 신청합니다. 여러 날 쉬려면 날짜별로 따로 신청해 주세요.</div>
           </div>
-          <div class="form-group" id="endGroup">
-            <label>종료일</label>
-            <input type="date" id="endDate" required ${policy.allowPastDate ? "" : `min="${todayStr}"`} />
-          </div>
+          <div class="form-group"></div>
         </div>
         <div class="form-row cols-1">
           <div class="form-group">
@@ -710,11 +708,9 @@ pages.apply = function () {
 
   const unitSel = $("#unit");
   const halfGroup = $("#halfGroup");
-  const endGroup = $("#endGroup");
   unitSel.addEventListener("change", () => {
     const half = unitSel.value === "0.5";
     halfGroup.style.display = half ? "" : "none";
-    endGroup.style.display = half ? "none" : "";
   });
 
   $("#cancelApply").addEventListener("click", () => navigate("myLeave"));
@@ -725,26 +721,19 @@ pages.apply = function () {
     submitBtn.disabled = true;
     try {
       const unit = Number(unitSel.value);
-      const start = $("#startDate").value;
-      let end = unit === 0.5 ? start : $("#endDate").value;
+      const dateVal = $("#leaveDate").value;
       const halfPart = unit === 0.5 ? $("#halfPart").value : null;
       const reason = $("#reason").value.trim();
 
-      if (!start || !end) throw new Error("날짜를 입력해 주세요.");
-      if (new Date(end) < new Date(start)) throw new Error("종료일이 시작일보다 빠를 수 없습니다.");
+      if (!dateVal) throw new Error("날짜를 선택해 주세요.");
 
-      let days;
-      if (unit === 0.5) days = 0.5;
-      else {
-        const ms = new Date(end) - new Date(start);
-        days = Math.round(ms / 86400000) + 1;
-      }
+      const days = unit; // 1일(연차) 또는 0.5일(반차)
 
       const bal2 = calcBalance(u);
       if (days > bal2.remaining) throw new Error(`잔여 연차(${bal2.remaining}일)보다 많이 신청할 수 없습니다.`);
 
       await Store.addRequest({
-        empNo: u.empNo, startDate: start, endDate: end,
+        empNo: u.empNo, startDate: dateVal, endDate: dateVal,
         days, halfDayPart: halfPart, reason,
       });
 
