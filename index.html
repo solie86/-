@@ -372,8 +372,8 @@
           <input id="suUsername" required autocomplete="off" placeholder="영문/숫자 권장" />
         </div>
         <div>
-          <label>이메일</label>
-          <input id="suEmail" type="email" />
+          <label>이메일 *</label>
+          <input id="suEmail" type="email" required placeholder="예: name@whrcompany.com" />
         </div>
       </div>
       <label>휴대전화 *</label>
@@ -1277,13 +1277,18 @@ pages.profile = function () {
 pages.employees = function () {
   const u = currentUser();
   if (u.role !== "admin") return navigate("home");
-  const list = Store.getEmployees();
+  // 입사일 내림차순 (최근 입사자가 위)
+  const list = Store.getEmployees().slice().sort((a, b) => {
+    const ah = a.hireDate || "";
+    const bh = b.hireDate || "";
+    return bh.localeCompare(ah);
+  });
 
   const blank = `<span style="color:var(--gray-400);">-</span>`;
 
   $("#mainContent").innerHTML = `
     <h2 class="page-title">직원 관리</h2>
-    <p class="page-sub">이름을 클릭하면 상세 정보 · 근태기록 · 면담일지를 볼 수 있습니다.</p>
+    <p class="page-sub">이름을 클릭하면 상세 정보 · 근태기록 · 면담일지를 볼 수 있습니다. (입사일 최근 순으로 정렬)</p>
     <div class="card">
       <div class="toolbar">
         <h3 style="margin:0;">직원 목록 (${list.length}명)</h3>
@@ -1294,6 +1299,7 @@ pages.employees = function () {
           <tr>
             <th>이름</th>
             <th>직급</th>
+            <th>권한</th>
             <th>이메일</th>
             <th>전화번호</th>
           </tr>
@@ -1303,6 +1309,7 @@ pages.employees = function () {
             return `<tr class="emp-row" data-emp-no="${escapeHtml(e.empNo)}" title="클릭하면 직원 상세 정보를 볼 수 있습니다">
               <td><strong>${escapeHtml(e.name)}</strong></td>
               <td>${e.position ? escapeHtml(e.position) : blank}</td>
+              <td><span class="badge role ${e.role === "admin" ? "admin" : ""}">${e.role === "admin" ? "관리자" : "직원"}</span></td>
               <td>${e.email ? escapeHtml(e.email) : blank}</td>
               <td>${e.phone ? escapeHtml(e.phone) : blank}</td>
             </tr>`;
