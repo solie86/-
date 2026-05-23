@@ -144,8 +144,8 @@
   .btn.green:hover { background: var(--green-600); }
   .btn.danger { background: var(--red-500); }
   .btn.danger:hover { background: #b53b3b; }
-  .btn.sm { padding: 6px 11px; font-size: 12px; }
-  .btn.xs { padding: 4px 8px; font-size: 11px; }
+  .btn.sm { padding: 7px 13px; font-size: 12.5px; }
+  .btn.xs { padding: 6px 10px; font-size: 12px; }
 
   .form-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 12px; }
   .form-row.cols-3 { grid-template-columns: repeat(3, 1fr); }
@@ -160,10 +160,11 @@
   .form-group textarea { resize: vertical; min-height: 70px; }
   .form-group .hint { font-size: 11px; color: var(--gray-400); margin-top: 4px; }
 
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  table th, table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--gray-100); }
-  table th { color: var(--gray-600); font-weight: 600; background: var(--gray-50); font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table th, table td { text-align: left; padding: 14px 14px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+  table th { color: var(--gray-600); font-weight: 600; background: var(--gray-50); font-size: 12.5px; letter-spacing: 0.02em; }
   table tbody tr:hover { background: var(--gray-50); }
+  table td .actions-cell { display: inline-flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 
   .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
   .badge.pending { background: #e9ecf2; color: var(--gray-600); }
@@ -196,8 +197,8 @@
     .main { padding: 18px 16px; }
     .grid-3 { grid-template-columns: 1fr; }
     .form-row, .form-row.cols-3 { grid-template-columns: 1fr; }
-    table { font-size: 12px; }
-    table th, table td { padding: 8px 6px; }
+    table { font-size: 13px; }
+    table th, table td { padding: 10px 8px; }
   }
 
   /* 월간 달력 */
@@ -1093,10 +1094,12 @@ pages.employees = function () {
               <td style="text-align:right;">${bal.granted}일</td>
               <td style="text-align:right;">${bal.used}일</td>
               <td style="text-align:right;"><strong>${bal.remaining}일</strong></td>
-              <td style="text-align:right; white-space:nowrap;">
-                <button class="btn ghost xs" data-edit="${escapeHtml(e.empNo)}">수정</button>
-                <button class="btn ghost xs" data-adjust="${escapeHtml(e.empNo)}">잔여조정</button>
-                <button class="btn ghost xs" style="color:var(--red-500);" data-delete="${escapeHtml(e.empNo)}">삭제</button>
+              <td style="text-align:right;">
+                <span class="actions-cell">
+                  <button class="btn ghost xs" data-edit="${escapeHtml(e.empNo)}">수정</button>
+                  <button class="btn ghost xs" data-adjust="${escapeHtml(e.empNo)}">잔여조정</button>
+                  <button class="btn ghost xs" style="color:var(--red-500);" data-delete="${escapeHtml(e.empNo)}">삭제</button>
+                </span>
               </td>
             </tr>`;
           }).join("")}
@@ -1607,25 +1610,29 @@ function renderRequestTable(reqs, opts) {
       let lastCol;
       if (showActions) {
         lastCol = `<td style="text-align:right;">
-             <button class="btn green sm" data-act="approve" data-id="${r.id}">승인</button>
-             <button class="btn danger sm" data-act="reject"  data-id="${r.id}">반려</button>
+             <span class="actions-cell">
+               <button class="btn green sm" data-act="approve" data-id="${r.id}">승인</button>
+               <button class="btn danger sm" data-act="reject"  data-id="${r.id}">반려</button>
+             </span>
            </td>`;
       } else if (showEdit) {
         lastCol = `<td>${r.processedAt ? fmtDate(r.processedAt) : "-"}</td>
-           <td style="text-align:right; white-space:nowrap;">
-             <button class="btn ghost xs" data-edit-req="${r.id}">수정</button>
-             <button class="btn ghost xs" style="color:var(--red-500);" data-del-req="${r.id}">삭제</button>
+           <td style="text-align:right;">
+             <span class="actions-cell">
+               <button class="btn ghost xs" data-edit-req="${r.id}">수정</button>
+               <button class="btn ghost xs" style="color:var(--red-500);" data-del-req="${r.id}">삭제</button>
+             </span>
            </td>`;
       } else {
         lastCol = `<td>${r.processedAt ? fmtDate(r.processedAt) : "-"}</td>`;
       }
 
       return `<tr>
-        <td>${fmtDate(r.requestedAt)}</td>
-        ${showEmp ? `<td>${emp ? escapeHtml(emp.name) : escapeHtml(r.empNo)} <span style="color:var(--gray-400);font-size:11px;">(${escapeHtml(r.empNo)})</span></td>` : ""}
-        <td>${range}</td>
-        <td>${r.days}일</td>
-        <td style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(r.reason || "")}">${escapeHtml(r.reason || "-")}</td>
+        <td style="white-space:nowrap;">${fmtDate(r.requestedAt)}</td>
+        ${showEmp ? `<td style="font-weight:600;">${emp ? escapeHtml(emp.name) : escapeHtml(r.empNo)}</td>` : ""}
+        <td style="white-space:nowrap;">${range}</td>
+        <td style="white-space:nowrap;">${r.days}일</td>
+        <td style="max-width:320px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(r.reason || "")}">${escapeHtml(r.reason || "-")}</td>
         <td>${badge}</td>
         ${lastCol}
       </tr>`;
