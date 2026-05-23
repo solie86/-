@@ -244,10 +244,20 @@
 
   .modal-backdrop { position: fixed; inset: 0; background: rgba(15,31,61,0.45); display: none; align-items: center; justify-content: center; z-index: 100; padding: 18px; }
   .modal-backdrop.active { display: flex; }
-  .modal { background: var(--white); border-radius: 12px; padding: 24px; width: 100%; max-width: 480px; box-shadow: var(--shadow-md); max-height: 90vh; overflow-y: auto; }
+  .modal { position: relative; background: var(--white); border-radius: 12px; padding: 24px; width: 100%; max-width: 480px; box-shadow: var(--shadow-md); max-height: 90vh; overflow-y: auto; }
   .modal.wide { max-width: 720px; }
-  .modal h3 { margin: 0 0 14px; color: var(--navy-900); }
+  .modal h3 { margin: 0 0 14px; color: var(--navy-900); padding-right: 32px; }
   .modal .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .modal-close {
+    position: absolute; top: 12px; right: 12px;
+    width: 32px; height: 32px; padding: 0;
+    background: transparent; border: none;
+    font-size: 22px; line-height: 1; font-weight: 400;
+    color: var(--gray-400); border-radius: 6px;
+    cursor: pointer; z-index: 2;
+    transition: background .15s, color .15s;
+  }
+  .modal-close:hover { background: var(--gray-100); color: var(--gray-800); }
 
   /* 직원 상세 모달용 탭 */
   .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--gray-200); margin: 0 0 18px; }
@@ -421,7 +431,10 @@
 </div>
 
 <div id="modalBackdrop" class="modal-backdrop">
-  <div class="modal" id="modalBody"></div>
+  <div class="modal">
+    <button type="button" class="modal-close" id="modalCloseBtn" aria-label="닫기" title="닫기">×</button>
+    <div id="modalBody"></div>
+  </div>
 </div>
 
 <script>
@@ -1277,18 +1290,18 @@ pages.profile = function () {
 pages.employees = function () {
   const u = currentUser();
   if (u.role !== "admin") return navigate("home");
-  // 입사일 내림차순 (최근 입사자가 위)
+  // 입사일 오름차순 (오래된 입사자가 위)
   const list = Store.getEmployees().slice().sort((a, b) => {
     const ah = a.hireDate || "";
     const bh = b.hireDate || "";
-    return bh.localeCompare(ah);
+    return ah.localeCompare(bh);
   });
 
   const blank = `<span style="color:var(--gray-400);">-</span>`;
 
   $("#mainContent").innerHTML = `
     <h2 class="page-title">직원 관리</h2>
-    <p class="page-sub">이름을 클릭하면 상세 정보 · 근태기록 · 면담일지를 볼 수 있습니다. (입사일 최근 순으로 정렬)</p>
+    <p class="page-sub">이름을 클릭하면 상세 정보 · 근태기록 · 면담일지를 볼 수 있습니다. (입사일 오래된 순으로 정렬)</p>
     <div class="card">
       <div class="toolbar">
         <h3 style="margin:0;">직원 목록 (${list.length}명)</h3>
@@ -1651,12 +1664,8 @@ function openEmployeeDetailModal(empNo, initialTab) {
       ${isAdmin ? `<button data-tab="interviews" class="${tab === "interviews" ? "active" : ""}">면담일지</button>` : ""}
     </div>
     <div id="empDetailContent"></div>
-    <div class="actions" style="margin-top:18px;">
-      <button type="button" class="btn ghost" id="closeModal">닫기</button>
-    </div>
   `;
   $("#modalBackdrop").classList.add("active");
-  $("#closeModal").addEventListener("click", closeModal);
 
   function renderTab(name) {
     $$(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
@@ -2054,13 +2063,12 @@ function openRequestDetailModal(id) {
         <div style="background:var(--gray-50); padding:12px 14px; border-radius:8px; font-size:13.5px; line-height:1.6; white-space:pre-wrap; word-break:break-word;">${escapeHtml(reasonText)}</div>
       </div>
     </div>
+    ${canSelfEdit ? `
     <div class="actions">
-      ${canSelfEdit ? `<button type="button" class="btn green" id="detailSelfEdit">수정하기</button>` : ""}
-      <button type="button" class="btn ghost" id="closeModal">닫기</button>
-    </div>
+      <button type="button" class="btn green" id="detailSelfEdit">수정하기</button>
+    </div>` : ""}
   `;
   $("#modalBackdrop").classList.add("active");
-  $("#closeModal").addEventListener("click", closeModal);
 
   if (canSelfEdit) {
     $("#detailSelfEdit").addEventListener("click", () => {
@@ -2470,6 +2478,9 @@ $$("#nav button").forEach((btn) => {
 $("#modalBackdrop").addEventListener("click", (e) => {
   if (e.target.id === "modalBackdrop") closeModal();
 });
+
+// 모달 우상단 X 버튼
+$("#modalCloseBtn").addEventListener("click", closeModal);
 
 /* ------------------ 16. 부팅 ------------------ */
 // 회원가입 폼은 페이지 로드 시 이미 DOM에 있으므로 자동 포맷팅 리스너를 미리 부착
