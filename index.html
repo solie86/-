@@ -245,8 +245,36 @@
   .modal-backdrop { position: fixed; inset: 0; background: rgba(15,31,61,0.45); display: none; align-items: center; justify-content: center; z-index: 100; padding: 18px; }
   .modal-backdrop.active { display: flex; }
   .modal { background: var(--white); border-radius: 12px; padding: 24px; width: 100%; max-width: 480px; box-shadow: var(--shadow-md); max-height: 90vh; overflow-y: auto; }
+  .modal.wide { max-width: 720px; }
   .modal h3 { margin: 0 0 14px; color: var(--navy-900); }
   .modal .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+  /* 직원 상세 모달용 탭 */
+  .tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--gray-200); margin: 0 0 18px; }
+  .tabs button {
+    background: transparent; border: none; padding: 10px 16px;
+    font-size: 13px; font-weight: 600; color: var(--gray-600);
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    transition: color .15s, border-color .15s;
+  }
+  .tabs button:hover { color: var(--navy-700); }
+  .tabs button.active { color: var(--navy-900); border-bottom-color: var(--green-500); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* 직원 관리 표 — 행 클릭 가능 */
+  table tbody tr.emp-row { cursor: pointer; }
+  table tbody tr.emp-row:hover { background: #eef3ff; }
+
+  /* 정보 박스 (상세 모달 내 정보 행) */
+  .info-row { display: flex; padding: 8px 0; border-bottom: 1px solid var(--gray-100); font-size: 13.5px; }
+  .info-row .lbl { width: 100px; color: var(--gray-600); font-weight: 600; flex-shrink: 0; }
+  .info-row .val { flex: 1; word-break: break-word; }
+
+  /* 근태 배지 */
+  .badge.att-late   { background: #fcf3d5; color: #8a6a14; }
+  .badge.att-absent { background: #fbe4e4; color: #a73838; }
+  .badge.att-sick   { background: #e3edff; color: var(--navy-700); }
 </style>
 </head>
 <body>
@@ -463,15 +491,29 @@ function escapeHtml(s) {
    * DB 컬럼명만 username으로 매핑
    ------------------------------------------------------------- */
 const dbToEmp = (r) => r && ({
-  empNo: r.username, name: r.name, email: r.email,
+  empNo: r.username, name: r.name, email: r.email, phone: r.phone,
   hireDate: r.hire_date, position: r.position, department: r.department,
   passwordHash: r.password_hash, role: r.role,
   leaveAdjustment: Number(r.leave_adjustment || 0),
 });
 const empToDb = (e) => ({
-  username: e.empNo, name: e.name, email: e.email,
+  username: e.empNo, name: e.name, email: e.email, phone: e.phone,
   hire_date: e.hireDate, position: e.position, department: e.department,
   password_hash: e.passwordHash, role: e.role,
+});
+
+// 근태기록 ↔ JS
+const dbToAttendance = (r) => r && ({
+  id: r.id, empNo: r.username, recordDate: r.record_date,
+  recordType: r.record_type, note: r.note,
+  createdAt: r.created_at, createdBy: r.created_by,
+});
+
+// 면담일지 ↔ JS
+const dbToInterview = (r) => r && ({
+  id: r.id, empNo: r.username, meetingDate: r.meeting_date,
+  title: r.title, content: r.content,
+  createdAt: r.created_at, updatedAt: r.updated_at, createdBy: r.created_by,
 });
 const dbToReq = (r) => r && ({
   id: r.id, empNo: r.username, requestedAt: r.requested_at,
@@ -488,9 +530,10 @@ const dbToPolicy = (r) => r ? ({
 
 /* ------------------ 3. 저장 모듈 ------------------ */
 const Store = {
-  _cache: { employees: [], requests: [], policy: null },
+  _cache: { employees: [], requests: [], policy: null, attendance: [], interviews: [] },
 
   async refresh() {
+    // 1단계: 핵심 테이블 — 반드시 성공해야 앱이 동작
     const [empsRes, reqsRes, polRes] = await Promise.all([
       sb.from("employees").select("*").order("username"),
       sb.from("leave_requests").select("*").order("requested_at", { ascending: false }),
@@ -502,6 +545,21 @@ const Store = {
     this._cache.employees = (empsRes.data || []).map(dbToEmp);
     this._cache.requests  = (reqsRes.data  || []).map(dbToReq);
     this._cache.policy    = dbToPolicy(polRes.data);
+
+    // 2단계: 부가 테이블 — v3 마이그레이션 미실행 시에도 앱은 계속 동작
+    try {
+      const [attRes, intRes] = await Promise.all([
+        sb.from("attendance_records").select("*").order("record_date", { ascending: false }),
+        sb.from("interview_notes").select("*").order("meeting_date", { ascending: false }),
+      ]);
+      if (!attRes.error) this._cache.attendance  = (attRes.data || []).map(dbToAttendance);
+      if (!intRes.error) this._cache.interviews  = (intRes.data || []).map(dbToInterview);
+    } catch (e) {
+      // 마이그레이션 전이면 그냥 빈 캐시로 둠
+      console.warn("v3 테이블 로드 실패 (마이그레이션 필요할 수 있음):", e);
+      this._cache.attendance = [];
+      this._cache.interviews = [];
+    }
   },
 
   getEmployees() { return this._cache.employees; },
@@ -509,6 +567,13 @@ const Store = {
   getRequests() { return this._cache.requests; },
   getRequestsByEmp(empNo) { return this._cache.requests.filter((r) => r.empNo === empNo); },
   getPolicy() { return this._cache.policy; },
+
+  getAttendanceByEmp(empNo) {
+    return this._cache.attendance.filter((a) => a.empNo === empNo);
+  },
+  getInterviewNotesByEmp(empNo) {
+    return this._cache.interviews.filter((i) => i.empNo === empNo);
+  },
 
   async addEmployee(emp) {
     const { error } = await sb.from("employees").insert(empToDb(emp));
@@ -521,6 +586,7 @@ const Store = {
     const row = {};
     if ("name" in patch) row.name = patch.name;
     if ("email" in patch) row.email = patch.email;
+    if ("phone" in patch) row.phone = patch.phone;
     if ("hireDate" in patch) row.hire_date = patch.hireDate;
     if ("position" in patch) row.position = patch.position;
     if ("department" in patch) row.department = patch.department;
@@ -529,6 +595,54 @@ const Store = {
     if ("empNo" in patch) row.username = patch.empNo; // 아이디 변경
     if (Object.keys(row).length === 0) return;
     const { error } = await sb.from("employees").update(row).eq("username", currentUsername);
+    if (error) throw error;
+    await this.refresh();
+  },
+
+  // ----- 근태기록 CRUD -----
+  async addAttendance(rec) {
+    const cur = currentUser();
+    const { error } = await sb.from("attendance_records").insert({
+      username: rec.empNo,
+      record_date: rec.recordDate,
+      record_type: rec.recordType,
+      note: rec.note || null,
+      created_by: cur ? cur.empNo : null,
+    });
+    if (error) throw error;
+    await this.refresh();
+  },
+  async deleteAttendance(id) {
+    const { error } = await sb.from("attendance_records").delete().eq("id", id);
+    if (error) throw error;
+    await this.refresh();
+  },
+
+  // ----- 면담일지 CRUD -----
+  async addInterviewNote(note) {
+    const cur = currentUser();
+    const { error } = await sb.from("interview_notes").insert({
+      username: note.empNo,
+      meeting_date: note.meetingDate,
+      title: note.title,
+      content: note.content || null,
+      created_by: cur ? cur.empNo : null,
+    });
+    if (error) throw error;
+    await this.refresh();
+  },
+  async updateInterviewNote(id, patch) {
+    const row = {};
+    if ("meetingDate" in patch) row.meeting_date = patch.meetingDate;
+    if ("title" in patch) row.title = patch.title;
+    if ("content" in patch) row.content = patch.content;
+    row.updated_at = new Date().toISOString();
+    const { error } = await sb.from("interview_notes").update(row).eq("id", id);
+    if (error) throw error;
+    await this.refresh();
+  },
+  async deleteInterviewNote(id) {
+    const { error } = await sb.from("interview_notes").delete().eq("id", id);
     if (error) throw error;
     await this.refresh();
   },
@@ -1017,7 +1131,11 @@ pages.profile = function () {
       </div>
       <div class="form-row">
         <div class="form-group"><label>이메일</label><input value="${escapeHtml(u.email || '-')}" disabled /></div>
+        <div class="form-group"><label>휴대전화</label><input value="${escapeHtml(u.phone || '-')}" disabled /></div>
+      </div>
+      <div class="form-row">
         <div class="form-group"><label>입사일</label><input value="${u.hireDate}" disabled /></div>
+        <div class="form-group"></div>
       </div>
       <p class="page-sub" style="margin: 8px 0 0; font-size: 12px;">위 정보 수정은 관리자에게 요청하세요.</p>
     </div>
@@ -1136,7 +1254,7 @@ pages.employees = function () {
 
   $("#mainContent").innerHTML = `
     <h2 class="page-title">직원 관리</h2>
-    <p class="page-sub">직원을 추가하거나 수정하고, 전체 연차 현황을 확인합니다.</p>
+    <p class="page-sub">직원을 추가하거나 수정하고, 전체 연차 현황을 확인합니다. 이름을 클릭하면 상세 정보 · 근태기록 · 면담일지를 볼 수 있습니다.</p>
     <div class="card">
       <div class="toolbar">
         <h3 style="margin:0;">직원 목록 (${list.length}명)</h3>
@@ -1156,8 +1274,8 @@ pages.employees = function () {
         <tbody>
           ${list.map((e) => {
             const bal = calcBalance(e);
-            return `<tr>
-              <td>${escapeHtml(e.name)}</td>
+            return `<tr class="emp-row" data-emp-no="${escapeHtml(e.empNo)}" title="클릭하면 직원 상세 정보를 볼 수 있습니다">
+              <td><strong>${escapeHtml(e.name)}</strong></td>
               <td>${e.hireDate}</td>
               <td><span class="badge role ${e.role === "admin" ? "admin" : ""}">${e.role === "admin" ? "관리자" : "직원"}</span></td>
               <td style="">${bal.granted}일</td>
@@ -1178,13 +1296,21 @@ pages.employees = function () {
   `;
   $("#openAddEmp").addEventListener("click", openAddEmployeeModal);
   $$("button[data-edit]").forEach((btn) => {
-    btn.addEventListener("click", () => openEditEmployeeModal(btn.dataset.edit));
+    btn.addEventListener("click", (ev) => { ev.stopPropagation(); openEditEmployeeModal(btn.dataset.edit); });
   });
   $$("button[data-adjust]").forEach((btn) => {
-    btn.addEventListener("click", () => openAdjustBalanceModal(btn.dataset.adjust));
+    btn.addEventListener("click", (ev) => { ev.stopPropagation(); openAdjustBalanceModal(btn.dataset.adjust); });
   });
   $$("button[data-delete]").forEach((btn) => {
-    btn.addEventListener("click", () => openDeleteEmployeeModal(btn.dataset.delete));
+    btn.addEventListener("click", (ev) => { ev.stopPropagation(); openDeleteEmployeeModal(btn.dataset.delete); });
+  });
+
+  // 행 클릭 → 직원 상세 모달 (액션 버튼 클릭은 무시)
+  $$("tr.emp-row").forEach((tr) => {
+    tr.addEventListener("click", (e) => {
+      if (e.target.closest("button")) return;
+      openEmployeeDetailModal(tr.dataset.empNo);
+    });
   });
 };
 
@@ -1307,9 +1433,10 @@ function openAddEmployeeModal() {
       </div>
       <div class="form-row">
         <div class="form-group"><label>이메일</label><input id="newEmail" type="email" /></div>
-        <div class="form-group"><label>입사일 *</label><input id="newHire" type="date" required /></div>
+        <div class="form-group"><label>휴대전화</label><input id="newPhone" type="tel" placeholder="예: 010-1234-5678" autocomplete="off" /></div>
       </div>
       <div class="form-row">
+        <div class="form-group"><label>입사일 *</label><input id="newHire" type="date" required /></div>
         <div class="form-group">
           <label>권한 *</label>
           <select id="newRole">
@@ -1317,7 +1444,10 @@ function openAddEmployeeModal() {
             <option value="admin">관리자</option>
           </select>
         </div>
+      </div>
+      <div class="form-row">
         <div class="form-group"><label>초기 비밀번호 *</label><input id="newPw" type="text" required placeholder="최소 4자" /></div>
+        <div class="form-group"></div>
       </div>
       <div class="actions">
         <button type="button" class="btn ghost" id="closeModal">취소</button>
@@ -1341,6 +1471,7 @@ function openAddEmployeeModal() {
         empNo,
         name: $("#newName").value.trim(),
         email: $("#newEmail").value.trim() || null,
+        phone: $("#newPhone").value.trim() || null,
         hireDate: $("#newHire").value,
         department: null,
         position: null,
@@ -1373,9 +1504,10 @@ function openEditEmployeeModal(empNo) {
       </div>
       <div class="form-row">
         <div class="form-group"><label>이메일</label><input id="edEmail" type="email" value="${escapeHtml(emp.email || '')}" /></div>
-        <div class="form-group"><label>입사일 *</label><input id="edHire" type="date" required value="${emp.hireDate}" /></div>
+        <div class="form-group"><label>휴대전화</label><input id="edPhone" type="tel" placeholder="예: 010-1234-5678" value="${escapeHtml(emp.phone || '')}" autocomplete="off" /></div>
       </div>
       <div class="form-row">
+        <div class="form-group"><label>입사일 *</label><input id="edHire" type="date" required value="${emp.hireDate}" /></div>
         <div class="form-group">
           <label>권한 *</label>
           <select id="edRole">
@@ -1383,7 +1515,6 @@ function openEditEmployeeModal(empNo) {
             <option value="admin" ${emp.role === "admin" ? "selected" : ""}>관리자</option>
           </select>
         </div>
-        <div class="form-group"></div>
       </div>
       <div class="actions">
         <button type="button" class="btn ghost" id="closeModal">취소</button>
@@ -1406,6 +1537,7 @@ function openEditEmployeeModal(empNo) {
       const patch = {
         name: $("#edName").value.trim(),
         email: $("#edEmail").value.trim() || null,
+        phone: $("#edPhone").value.trim() || null,
         hireDate: $("#edHire").value,
         role: $("#edRole").value,
       };
@@ -1466,7 +1598,361 @@ function openResetPwModal(empNo) {
   });
 }
 
-function closeModal() { $("#modalBackdrop").classList.remove("active"); }
+function closeModal() {
+  $("#modalBackdrop").classList.remove("active");
+  // 와이드 모드 해제
+  const m = $("#modalBackdrop .modal");
+  if (m) m.classList.remove("wide");
+}
+
+/* ------------------ 직원 상세 모달 (탭: 기본정보 / 근태기록 / 면담일지) ------------------ */
+function openEmployeeDetailModal(empNo, initialTab) {
+  const emp = Store.getEmployee(empNo);
+  if (!emp) return alert("직원 정보를 찾을 수 없습니다.");
+  const cur = currentUser();
+  const isAdmin = cur && cur.role === "admin";
+  const tab = initialTab || "info";
+
+  // 모달을 와이드 모드로
+  $("#modalBackdrop .modal").classList.add("wide");
+
+  $("#modalBody").innerHTML = `
+    <h3 style="margin-bottom:6px;">${escapeHtml(emp.name)} <span style="font-size:12px; color:var(--gray-600); font-weight:500;">(${escapeHtml(emp.empNo)})</span></h3>
+    <div class="tabs">
+      <button data-tab="info"       class="${tab === "info"       ? "active" : ""}">기본정보</button>
+      <button data-tab="attendance" class="${tab === "attendance" ? "active" : ""}">근태기록</button>
+      ${isAdmin ? `<button data-tab="interviews" class="${tab === "interviews" ? "active" : ""}">면담일지</button>` : ""}
+    </div>
+    <div id="empDetailContent"></div>
+    <div class="actions" style="margin-top:18px;">
+      <button type="button" class="btn ghost" id="closeModal">닫기</button>
+    </div>
+  `;
+  $("#modalBackdrop").classList.add("active");
+  $("#closeModal").addEventListener("click", closeModal);
+
+  function renderTab(name) {
+    $$(".tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
+    if (name === "info")             renderEmployeeInfoTab(empNo);
+    else if (name === "attendance")  renderAttendanceTab(empNo);
+    else if (name === "interviews" && isAdmin) renderInterviewTab(empNo);
+  }
+  $$(".tabs button").forEach((b) => {
+    b.addEventListener("click", () => renderTab(b.dataset.tab));
+  });
+  renderTab(tab);
+}
+
+function renderEmployeeInfoTab(empNo) {
+  const emp = Store.getEmployee(empNo);
+  const bal = calcBalance(emp);
+  const year = today().getFullYear();
+  const cur = currentUser();
+  const isAdmin = cur && cur.role === "admin";
+
+  const row = (lbl, val) => `<div class="info-row"><div class="lbl">${lbl}</div><div class="val">${val}</div></div>`;
+
+  $("#empDetailContent").innerHTML = `
+    <div>
+      ${row("이름", escapeHtml(emp.name))}
+      ${row("아이디", escapeHtml(emp.empNo))}
+      ${row("권한", emp.role === "admin" ? `<span class="badge role admin">관리자</span>` : `<span class="badge role">직원</span>`)}
+      ${row("입사일", emp.hireDate)}
+      ${row("이메일", emp.email ? escapeHtml(emp.email) : `<span style="color:var(--gray-400);">미입력</span>`)}
+      ${row("휴대전화", emp.phone ? escapeHtml(emp.phone) : `<span style="color:var(--gray-400);">미입력</span>`)}
+      ${row("부서", emp.department ? escapeHtml(emp.department) : `<span style="color:var(--gray-400);">미입력</span>`)}
+      ${row("직급", emp.position ? escapeHtml(emp.position) : `<span style="color:var(--gray-400);">미입력</span>`)}
+    </div>
+    <div style="background:var(--gray-50); padding:14px 16px; border-radius:8px; margin-top:14px; font-size:13.5px; line-height:1.8;">
+      <strong>${year}년 연차 현황</strong><br/>
+      부여 <strong>${bal.granted}일</strong> · 사용 <strong>${bal.used}일</strong> · 잔여 <strong style="color:var(--green-600);">${bal.remaining}일</strong>
+      ${bal.adjustment ? `<br/><span style="color:var(--gray-600); font-size:12px;">조정값: ${bal.adjustment >= 0 ? "+" : ""}${bal.adjustment}일</span>` : ""}
+    </div>
+    ${isAdmin ? `
+      <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+        <button class="btn ghost sm" id="detailEdit">정보 수정</button>
+        <button class="btn ghost sm" id="detailResetPw">비밀번호 리셋</button>
+        <button class="btn ghost sm" id="detailAdjust">잔여 조정</button>
+      </div>` : ""}
+  `;
+
+  if (isAdmin) {
+    $("#detailEdit").addEventListener("click", () => { closeModal(); openEditEmployeeModal(empNo); });
+    $("#detailResetPw").addEventListener("click", () => { closeModal(); openResetPwModal(empNo); });
+    $("#detailAdjust").addEventListener("click", () => { closeModal(); openAdjustBalanceModal(empNo); });
+  }
+}
+
+function attTypeLabel(t) {
+  return t === "late" ? "지각" : t === "absent" ? "무단결근" : t === "sick" ? "병가" : t;
+}
+function attTypeBadge(t) {
+  const cls = t === "late" ? "att-late" : t === "absent" ? "att-absent" : "att-sick";
+  return `<span class="badge ${cls}">${attTypeLabel(t)}</span>`;
+}
+
+function renderAttendanceTab(empNo) {
+  const cur = currentUser();
+  const isAdmin = cur && cur.role === "admin";
+  const records = Store.getAttendanceByEmp(empNo)
+    .slice()
+    .sort((a, b) => (a.recordDate < b.recordDate ? 1 : -1));
+
+  const counts = {
+    late:   records.filter((r) => r.recordType === "late").length,
+    absent: records.filter((r) => r.recordType === "absent").length,
+    sick:   records.filter((r) => r.recordType === "sick").length,
+  };
+
+  $("#empDetailContent").innerHTML = `
+    <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+      <div style="flex:1; min-width:120px; background:#fcf3d5; padding:12px 14px; border-radius:8px;">
+        <div style="font-size:11px; color:#8a6a14; font-weight:600;">지각</div>
+        <div style="font-size:20px; font-weight:700; color:#8a6a14;">${counts.late}<span style="font-size:12px; font-weight:500;">건</span></div>
+      </div>
+      <div style="flex:1; min-width:120px; background:#fbe4e4; padding:12px 14px; border-radius:8px;">
+        <div style="font-size:11px; color:#a73838; font-weight:600;">무단결근</div>
+        <div style="font-size:20px; font-weight:700; color:#a73838;">${counts.absent}<span style="font-size:12px; font-weight:500;">건</span></div>
+      </div>
+      <div style="flex:1; min-width:120px; background:#e3edff; padding:12px 14px; border-radius:8px;">
+        <div style="font-size:11px; color:var(--navy-700); font-weight:600;">병가</div>
+        <div style="font-size:20px; font-weight:700; color:var(--navy-700);">${counts.sick}<span style="font-size:12px; font-weight:500;">건</span></div>
+      </div>
+    </div>
+
+    ${isAdmin ? `
+      <form id="addAttForm" style="background:var(--gray-50); padding:14px; border-radius:8px; margin-bottom:14px;">
+        <div style="font-weight:600; font-size:13px; margin-bottom:8px;">+ 근태 기록 추가</div>
+        <div class="form-row cols-3">
+          <div class="form-group">
+            <label>날짜 *</label>
+            <input type="date" id="attDate" required value="${fmtDate(today())}" />
+          </div>
+          <div class="form-group">
+            <label>유형 *</label>
+            <select id="attType" required>
+              <option value="late">지각</option>
+              <option value="absent">무단결근</option>
+              <option value="sick">병가</option>
+            </select>
+          </div>
+          <div class="form-group" style="display:flex; align-items:flex-end;">
+            <button type="submit" class="btn green sm" id="saveAtt" style="width:100%;">추가</button>
+          </div>
+        </div>
+        <div class="form-row cols-1">
+          <div class="form-group">
+            <label>비고</label>
+            <input type="text" id="attNote" placeholder="예: 30분 지각, 사전 연락 없음" />
+          </div>
+        </div>
+      </form>
+    ` : ""}
+
+    <div>
+      ${records.length === 0
+        ? `<div class="empty">근태 기록이 없습니다.</div>`
+        : `<table>
+            <thead><tr>
+              <th>날짜</th><th>유형</th><th>비고</th><th>등록일</th>
+              ${isAdmin ? `<th style="">관리</th>` : ""}
+            </tr></thead>
+            <tbody>
+              ${records.map((r) => `
+                <tr>
+                  <td style="white-space:nowrap;">${r.recordDate}</td>
+                  <td>${attTypeBadge(r.recordType)}</td>
+                  <td style="text-align:left;">${escapeHtml(r.note || "-")}</td>
+                  <td style="white-space:nowrap; font-size:12px; color:var(--gray-600);">${fmtDate(r.createdAt)}</td>
+                  ${isAdmin ? `<td><button class="btn ghost xs" data-del-att="${r.id}" style="color:var(--red-500);">삭제</button></td>` : ""}
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>`}
+    </div>
+  `;
+
+  if (isAdmin) {
+    $("#addAttForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const btn = $("#saveAtt");
+      btn.disabled = true;
+      try {
+        await Store.addAttendance({
+          empNo,
+          recordDate: $("#attDate").value,
+          recordType: $("#attType").value,
+          note: $("#attNote").value.trim() || null,
+        });
+        // 탭만 다시 그리기 (모달은 유지)
+        renderAttendanceTab(empNo);
+      } catch (err) {
+        alert("추가 실패: " + (err.message || err));
+        btn.disabled = false;
+      }
+    });
+
+    $$("button[data-del-att]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("이 근태 기록을 삭제할까요?")) return;
+        btn.disabled = true;
+        try {
+          await Store.deleteAttendance(btn.dataset.delAtt);
+          renderAttendanceTab(empNo);
+        } catch (err) {
+          alert("삭제 실패: " + (err.message || err));
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+}
+
+function renderInterviewTab(empNo) {
+  const cur = currentUser();
+  if (!cur || cur.role !== "admin") {
+    $("#empDetailContent").innerHTML = `<div class="empty">관리자만 열람할 수 있습니다.</div>`;
+    return;
+  }
+  const notes = Store.getInterviewNotesByEmp(empNo)
+    .slice()
+    .sort((a, b) => (a.meetingDate < b.meetingDate ? 1 : -1));
+
+  $("#empDetailContent").innerHTML = `
+    <form id="addNoteForm" style="background:var(--gray-50); padding:14px; border-radius:8px; margin-bottom:16px;">
+      <div style="font-weight:600; font-size:13px; margin-bottom:8px;">+ 면담일지 작성</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>면담일 *</label>
+          <input type="date" id="noteDate" required value="${fmtDate(today())}" />
+        </div>
+        <div class="form-group">
+          <label>제목 *</label>
+          <input type="text" id="noteTitle" required placeholder="예: 1차 분기 정기 면담" />
+        </div>
+      </div>
+      <div class="form-row cols-1">
+        <div class="form-group">
+          <label>내용</label>
+          <textarea id="noteContent" placeholder="면담 내용을 자유롭게 작성해 주세요." style="min-height:100px;"></textarea>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:flex-end;">
+        <button type="submit" class="btn green sm" id="saveNote">저장</button>
+      </div>
+    </form>
+
+    <div style="font-size:13px; color:var(--gray-600); font-weight:600; margin-bottom:8px;">면담 이력 (${notes.length}건)</div>
+    ${notes.length === 0
+      ? `<div class="empty">면담일지가 없습니다.</div>`
+      : notes.map((n) => `
+          <div style="background:white; border:1px solid var(--gray-200); border-radius:8px; padding:14px 16px; margin-bottom:10px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:6px;">
+              <div>
+                <div style="font-weight:700; color:var(--navy-900); font-size:14px;">${escapeHtml(n.title)}</div>
+                <div style="font-size:11.5px; color:var(--gray-600); margin-top:2px;">
+                  면담일 ${n.meetingDate} · 등록 ${fmtDate(n.createdAt)}${n.createdBy ? ` · 작성자 ${escapeHtml(n.createdBy)}` : ""}
+                </div>
+              </div>
+              <div style="flex-shrink:0;">
+                <button class="btn ghost xs" data-edit-note="${n.id}">수정</button>
+                <button class="btn ghost xs" style="color:var(--red-500);" data-del-note="${n.id}">삭제</button>
+              </div>
+            </div>
+            ${n.content ? `<div style="font-size:13px; line-height:1.6; white-space:pre-wrap; word-break:break-word; color:var(--gray-800); margin-top:6px;">${escapeHtml(n.content)}</div>` : `<div style="font-size:12px; color:var(--gray-400);">(내용 없음)</div>`}
+          </div>
+        `).join("")}
+  `;
+
+  $("#addNoteForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#saveNote");
+    btn.disabled = true;
+    try {
+      const title = $("#noteTitle").value.trim();
+      if (!title) throw new Error("제목을 입력해 주세요.");
+      await Store.addInterviewNote({
+        empNo,
+        meetingDate: $("#noteDate").value,
+        title,
+        content: $("#noteContent").value.trim() || null,
+      });
+      renderInterviewTab(empNo);
+    } catch (err) {
+      alert("저장 실패: " + (err.message || err));
+      btn.disabled = false;
+    }
+  });
+
+  $$("button[data-edit-note]").forEach((btn) => {
+    btn.addEventListener("click", () => openEditInterviewNoteModal(btn.dataset.editNote, empNo));
+  });
+  $$("button[data-del-note]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("이 면담일지를 삭제할까요? 되돌릴 수 없습니다.")) return;
+      btn.disabled = true;
+      try {
+        await Store.deleteInterviewNote(btn.dataset.delNote);
+        renderInterviewTab(empNo);
+      } catch (err) {
+        alert("삭제 실패: " + (err.message || err));
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+function openEditInterviewNoteModal(id, empNo) {
+  const note = Store._cache.interviews.find((n) => n.id === id);
+  if (!note) return alert("면담일지를 찾을 수 없습니다.");
+
+  // 현재 모달을 잠시 덮음 (간단히 modalBody만 교체, wide 유지)
+  $("#modalBody").innerHTML = `
+    <h3>면담일지 수정</h3>
+    <form id="editNoteForm">
+      <div class="form-row">
+        <div class="form-group">
+          <label>면담일 *</label>
+          <input type="date" id="enDate" required value="${note.meetingDate}" />
+        </div>
+        <div class="form-group">
+          <label>제목 *</label>
+          <input type="text" id="enTitle" required value="${escapeHtml(note.title)}" />
+        </div>
+      </div>
+      <div class="form-row cols-1">
+        <div class="form-group">
+          <label>내용</label>
+          <textarea id="enContent" style="min-height:140px;">${escapeHtml(note.content || "")}</textarea>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn ghost" id="cancelEditNote">취소</button>
+        <button type="submit" class="btn green" id="saveEditNote">저장</button>
+      </div>
+    </form>
+  `;
+  $("#cancelEditNote").addEventListener("click", () => openEmployeeDetailModal(empNo, "interviews"));
+  $("#editNoteForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#saveEditNote");
+    btn.disabled = true;
+    try {
+      const title = $("#enTitle").value.trim();
+      if (!title) throw new Error("제목을 입력해 주세요.");
+      await Store.updateInterviewNote(id, {
+        meetingDate: $("#enDate").value,
+        title,
+        content: $("#enContent").value.trim() || null,
+      });
+      // 다시 상세 모달의 면담 탭으로
+      openEmployeeDetailModal(empNo, "interviews");
+    } catch (err) {
+      alert("저장 실패: " + (err.message || err));
+      btn.disabled = false;
+    }
+  });
+}
 
 // 신청 표의 모든 행에 클릭 이벤트 바인딩 (상세 모달)
 // 단, 액션 컬럼의 버튼 클릭은 stopPropagation으로 무시
@@ -1950,7 +2436,7 @@ $("#modalBackdrop").addEventListener("click", (e) => {
         <div style="max-width:500px; padding:24px; background:white; color:var(--gray-800); border-radius:12px;">
           <h2 style="margin-top:0; color:var(--red-500);">Supabase 연결 실패</h2>
           <p>${escapeHtml(e.message || e)}</p>
-          <p style="font-size:12px; color:var(--gray-600);">DB 마이그레이션(emp_no → username)이 아직 실행되지 않은 경우 이 오류가 납니다. supabase_migration_v2.sql 을 Supabase SQL Editor에서 실행해 주세요.</p>
+          <p style="font-size:12px; color:var(--gray-600);">DB 마이그레이션(emp_no → username)이 아직 실행되지 않은 경우 이 오류가 납니다. supabase_migration_v2.sql 을 Supabase SQL Editor에서 실행해 주세요. (직원 상세 기능을 추가하려면 v3 마이그레이션 supabase_migration_v3_employee_detail.sql 도 실행해 주세요.)</p>
         </div>
       </div>`;
     return;
