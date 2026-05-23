@@ -200,6 +200,45 @@
     table th, table td { padding: 8px 6px; }
   }
 
+  /* 월간 달력 */
+  .cal-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; flex-wrap: wrap; }
+  .cal-toolbar .title { font-size: 16px; font-weight: 700; color: var(--navy-900); }
+  .cal-toolbar .nav-btns { display: flex; gap: 6px; }
+  .cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    gap: 1px; background: var(--gray-200);
+    border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden;
+  }
+  .cal-head, .cal-cell { background: white; }
+  .cal-head {
+    text-align: center; font-size: 11px; font-weight: 700; color: var(--gray-600);
+    background: var(--gray-50); padding: 8px 6px;
+  }
+  .cal-head.sun, .cal-head.sat { color: var(--red-500); }
+  .cal-cell { padding: 6px 6px 8px; min-height: 90px; }
+  .cal-cell .day { font-size: 11px; color: var(--gray-600); margin-bottom: 4px; }
+  .cal-cell.other-month { background: #fafbfd; }
+  .cal-cell.other-month .day { color: var(--gray-400); }
+  .cal-cell.today .day { color: var(--navy-700); font-weight: 700; }
+  .cal-cell.today { background: #f4f8ff; }
+  .cal-cell.sun .day, .cal-cell.sat .day { color: var(--red-500); }
+  .cal-evt {
+    display: block; font-size: 10.5px;
+    padding: 2px 6px; border-radius: 3px; margin-bottom: 2px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: white; font-weight: 600;
+  }
+  .cal-evt.pending { background: var(--gray-400); }
+  .cal-evt.approved { background: var(--green-500); }
+  .cal-evt.approved-half { background: var(--yellow-500); color: #5a4710; }
+  .cal-legend { display: flex; gap: 14px; font-size: 11px; color: var(--gray-600); margin-top: 10px; flex-wrap: wrap; }
+  .cal-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .cal-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+  @media (max-width: 768px) {
+    .cal-cell { min-height: 60px; padding: 4px; }
+    .cal-evt { font-size: 9px; padding: 1px 4px; }
+  }
+
   .modal-backdrop { position: fixed; inset: 0; background: rgba(15,31,61,0.45); display: none; align-items: center; justify-content: center; z-index: 100; padding: 18px; }
   .modal-backdrop.active { display: flex; }
   .modal { background: var(--white); border-radius: 12px; padding: 24px; width: 100%; max-width: 480px; box-shadow: var(--shadow-md); max-height: 90vh; overflow-y: auto; }
@@ -598,6 +637,8 @@ async function navigate(page) {
 }
 
 /* ------------------ 8. 페이지: 홈 ------------------ */
+let _calMonth = new Date(today().getFullYear(), today().getMonth(), 1);
+
 pages.home = function () {
   const u = currentUser();
   const bal = calcBalance(u);
@@ -622,12 +663,30 @@ pages.home = function () {
 
   $("#mainContent").innerHTML = `
     <h2 class="page-title">안녕하세요, ${escapeHtml(u.name)}님</h2>
-    <p class="page-sub">${today().getFullYear()}년 연차 현황을 확인하세요.</p>
+    <p class="page-sub">${today().getFullYear()}년 연차 현황과 전사 일정을 확인하세요.</p>
     <div class="grid-3">
       <div class="stat-card"><div class="label">올해 부여 연차</div><div class="value">${bal.granted}<span class="unit">일</span></div></div>
       <div class="stat-card yellow"><div class="label">사용 연차</div><div class="value">${bal.used}<span class="unit">일</span></div></div>
       <div class="stat-card green"><div class="label">잔여 연차</div><div class="value">${bal.remaining}<span class="unit">일</span></div></div>
     </div>
+
+    <div class="card" style="margin-top:18px;">
+      <div class="cal-toolbar">
+        <div class="title" id="calTitle"></div>
+        <div class="nav-btns">
+          <button class="btn ghost sm" id="calToday">오늘</button>
+          <button class="btn ghost sm" id="calPrev">◀</button>
+          <button class="btn ghost sm" id="calNext">▶</button>
+        </div>
+      </div>
+      <div id="calGrid"></div>
+      <div class="cal-legend">
+        <span><i style="background:var(--green-500);"></i>연차</span>
+        <span><i style="background:var(--yellow-500);"></i>반차</span>
+        <span><i style="background:var(--gray-400);"></i>승인 대기</span>
+      </div>
+    </div>
+
     ${myPending.length ? `
       <div class="card" style="margin-top:18px;">
         <h3>승인 대기 중인 내 신청 (${myPending.length}건)</h3>
@@ -635,7 +694,94 @@ pages.home = function () {
       </div>` : ""}
     ${adminBlock}
   `;
+
+  renderMonthCalendar();
+  $("#calPrev").addEventListener("click", () => {
+    _calMonth = new Date(_calMonth.getFullYear(), _calMonth.getMonth() - 1, 1);
+    renderMonthCalendar();
+  });
+  $("#calNext").addEventListener("click", () => {
+    _calMonth = new Date(_calMonth.getFullYear(), _calMonth.getMonth() + 1, 1);
+    renderMonthCalendar();
+  });
+  $("#calToday").addEventListener("click", () => {
+    _calMonth = new Date(today().getFullYear(), today().getMonth(), 1);
+    renderMonthCalendar();
+  });
 };
+
+function renderMonthCalendar() {
+  const year = _calMonth.getFullYear();
+  const month = _calMonth.getMonth(); // 0~11
+  const firstDay = new Date(year, month, 1);
+  const firstWeekday = firstDay.getDay(); // 0=일
+  const startDate = new Date(year, month, 1 - firstWeekday);
+  const todayStr = fmtDate(today());
+
+  // 날짜별 일정 매핑 (반려는 제외)
+  const eventsByDate = {};
+  Store.getRequests()
+    .filter(r => r.status === "pending" || r.status === "approved")
+    .forEach(r => {
+      const s = new Date(r.startDate);
+      const e = new Date(r.endDate);
+      const d = new Date(s);
+      while (d <= e) {
+        const k = fmtDate(d);
+        if (!eventsByDate[k]) eventsByDate[k] = [];
+        eventsByDate[k].push(r);
+        d.setDate(d.getDate() + 1);
+      }
+    });
+
+  $("#calTitle").textContent = `${year}년 ${month + 1}월`;
+
+  const dayHeads = ["일","월","화","수","목","금","토"];
+  let html = `<div class="cal-grid">`;
+  dayHeads.forEach((h, i) => {
+    const cls = i === 0 ? "sun" : (i === 6 ? "sat" : "");
+    html += `<div class="cal-head ${cls}">${h}</div>`;
+  });
+
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(startDate);
+    d.setDate(startDate.getDate() + i);
+    const isOther = d.getMonth() !== month;
+    const isToday = fmtDate(d) === todayStr;
+    const wd = d.getDay();
+    const classes = ["cal-cell"];
+    if (isOther) classes.push("other-month");
+    if (isToday) classes.push("today");
+    if (wd === 0) classes.push("sun");
+    if (wd === 6) classes.push("sat");
+
+    const k = fmtDate(d);
+    const evts = (eventsByDate[k] || []).slice().sort((a,b) => a.empNo.localeCompare(b.empNo));
+
+    let evtHtml = "";
+    evts.forEach(r => {
+      const emp = Store.getEmployee(r.empNo);
+      const name = emp ? emp.name : r.empNo;
+      let label, cls;
+      if (r.status === "pending") {
+        label = `[대기]${name}`;
+        cls = "pending";
+      } else if (r.days === 0.5) {
+        const part = r.halfDayPart === "AM" ? "오전반차" : "오후반차";
+        label = `[${part}]${name}`;
+        cls = "approved-half";
+      } else {
+        label = `[연차]${name}`;
+        cls = "approved";
+      }
+      evtHtml += `<span class="cal-evt ${cls}" title="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
+    });
+
+    html += `<div class="${classes.join(" ")}"><div class="day">${d.getDate()}</div>${evtHtml}</div>`;
+  }
+  html += `</div>`;
+  $("#calGrid").innerHTML = html;
+}
 
 /* ------------------ 9. 페이지: 내 연차 ------------------ */
 pages.myLeave = function () {
