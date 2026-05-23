@@ -1253,9 +1253,11 @@ pages.employees = function () {
   if (u.role !== "admin") return navigate("home");
   const list = Store.getEmployees();
 
+  const blank = `<span style="color:var(--gray-400);">-</span>`;
+
   $("#mainContent").innerHTML = `
     <h2 class="page-title">직원 관리</h2>
-    <p class="page-sub">직원을 추가하거나 수정하고, 전체 연차 현황을 확인합니다. 이름을 클릭하면 상세 정보 · 근태기록 · 면담일지를 볼 수 있습니다.</p>
+    <p class="page-sub">이름을 클릭하면 상세 정보 · 근태기록 · 면담일지를 볼 수 있습니다.</p>
     <div class="card">
       <div class="toolbar">
         <h3 style="margin:0;">직원 목록 (${list.length}명)</h3>
@@ -1265,30 +1267,18 @@ pages.employees = function () {
         <thead>
           <tr>
             <th>이름</th>
-            <th>입사일</th><th>권한</th>
-            <th style="">부여</th>
-            <th style="">사용</th>
-            <th style="">잔여</th>
-            <th style="">관리</th>
+            <th>직급</th>
+            <th>이메일</th>
+            <th>전화번호</th>
           </tr>
         </thead>
         <tbody>
           ${list.map((e) => {
-            const bal = calcBalance(e);
             return `<tr class="emp-row" data-emp-no="${escapeHtml(e.empNo)}" title="클릭하면 직원 상세 정보를 볼 수 있습니다">
               <td><strong>${escapeHtml(e.name)}</strong></td>
-              <td>${e.hireDate}</td>
-              <td><span class="badge role ${e.role === "admin" ? "admin" : ""}">${e.role === "admin" ? "관리자" : "직원"}</span></td>
-              <td style="">${bal.granted}일</td>
-              <td style="">${bal.used}일</td>
-              <td style=""><strong>${bal.remaining}일</strong></td>
-              <td style="">
-                <span class="actions-cell">
-                  <button class="btn ghost xs" data-edit="${escapeHtml(e.empNo)}">수정</button>
-                  <button class="btn ghost xs" data-adjust="${escapeHtml(e.empNo)}">잔여조정</button>
-                  <button class="btn ghost xs" style="color:var(--red-500);" data-delete="${escapeHtml(e.empNo)}">삭제</button>
-                </span>
-              </td>
+              <td>${e.position ? escapeHtml(e.position) : blank}</td>
+              <td>${e.email ? escapeHtml(e.email) : blank}</td>
+              <td>${e.phone ? escapeHtml(e.phone) : blank}</td>
             </tr>`;
           }).join("")}
         </tbody>
@@ -1296,22 +1286,10 @@ pages.employees = function () {
     </div>
   `;
   $("#openAddEmp").addEventListener("click", openAddEmployeeModal);
-  $$("button[data-edit]").forEach((btn) => {
-    btn.addEventListener("click", (ev) => { ev.stopPropagation(); openEditEmployeeModal(btn.dataset.edit); });
-  });
-  $$("button[data-adjust]").forEach((btn) => {
-    btn.addEventListener("click", (ev) => { ev.stopPropagation(); openAdjustBalanceModal(btn.dataset.adjust); });
-  });
-  $$("button[data-delete]").forEach((btn) => {
-    btn.addEventListener("click", (ev) => { ev.stopPropagation(); openDeleteEmployeeModal(btn.dataset.delete); });
-  });
 
-  // 행 클릭 → 직원 상세 모달 (액션 버튼 클릭은 무시)
+  // 행 클릭 → 직원 상세 모달
   $$("tr.emp-row").forEach((tr) => {
-    tr.addEventListener("click", (e) => {
-      if (e.target.closest("button")) return;
-      openEmployeeDetailModal(tr.dataset.empNo);
-    });
+    tr.addEventListener("click", () => openEmployeeDetailModal(tr.dataset.empNo));
   });
 };
 
@@ -1665,11 +1643,13 @@ function renderEmployeeInfoTab(empNo) {
     ${isAdmin ? `
       <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
         <button class="btn ghost sm" id="infoEdit">정보 수정</button>
+        <button class="btn ghost sm" id="infoDelete" style="color:var(--red-500);">직원 삭제</button>
       </div>` : ""}
   `;
 
   if (isAdmin) {
     $("#infoEdit").addEventListener("click", () => { closeModal(); openEditEmployeeModal(empNo); });
+    $("#infoDelete").addEventListener("click", () => { closeModal(); openDeleteEmployeeModal(empNo); });
   }
 }
 
