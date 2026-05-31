@@ -2176,7 +2176,7 @@ function openEmployeeDetailModal(empNo, initialTab) {
   if (!emp) return alert("직원 정보를 찾을 수 없습니다.");
   const cur = currentUser();
   const isAdmin = cur && cur.role === "admin";
-  const tab = initialTab || "info";
+  const tab = initialTab || "attendance";
 
   // 모달을 와이드 모드로
   $("#modalBackdrop .modal").classList.add("wide");
@@ -2184,9 +2184,9 @@ function openEmployeeDetailModal(empNo, initialTab) {
   $("#modalBody").innerHTML = `
     <h3 style="margin-bottom:6px;">${escapeHtml(emp.name)} <span style="font-size:12px; color:var(--gray-600); font-weight:500;">(${escapeHtml(emp.empNo)})</span></h3>
     <div class="tabs">
-      <button data-tab="info"       class="${tab === "info"       ? "active" : ""}">기본정보</button>
       <button data-tab="attendance" class="${tab === "attendance" ? "active" : ""}">근태기록</button>
       ${isAdmin ? `<button data-tab="interviews" class="${tab === "interviews" ? "active" : ""}">면담일지</button>` : ""}
+      <button data-tab="info"       class="${tab === "info"       ? "active" : ""}">기본정보</button>
     </div>
     <div id="empDetailContent"></div>
   `;
