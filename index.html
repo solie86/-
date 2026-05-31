@@ -225,6 +225,14 @@
   .cal-cell.today .day { color: var(--navy-700); font-weight: 700; }
   .cal-cell.today { background: #f4f8ff; }
   .cal-cell.sun .day, .cal-cell.sat .day { color: var(--red-500); }
+  .cal-cell.holiday .day { color: var(--red-500); }
+  .cal-cell.holiday { background: #fff6f6; }
+  .cal-cell.holiday.today { background: #f4f8ff; }
+  .cal-holiday-name {
+    display: block; font-size: 11.5px; font-weight: 700;
+    color: var(--red-500); margin-bottom: 4px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .cal-evt {
     display: block; font-size: 12.5px;
     padding: 3px 7px; border-radius: 3px; margin-bottom: 3px;
@@ -988,6 +996,30 @@ pages.home = function () {
   });
 };
 
+// 대한민국 공휴일 (대체공휴일 포함). 음력 명절·대체공휴일은 매년 달라 연도별로 관리.
+const HOLIDAYS = {
+  "2026-01-01": "신정",
+  "2026-02-16": "설날 연휴",
+  "2026-02-17": "설날",
+  "2026-02-18": "설날 연휴",
+  "2026-03-01": "삼일절",
+  "2026-03-02": "대체공휴일",
+  "2026-05-05": "어린이날",
+  "2026-05-24": "부처님오신날",
+  "2026-05-25": "대체공휴일",
+  "2026-06-06": "현충일",
+  "2026-08-15": "광복절",
+  "2026-08-17": "대체공휴일",
+  "2026-09-24": "추석 연휴",
+  "2026-09-25": "추석",
+  "2026-09-26": "추석 연휴",
+  "2026-10-03": "개천절",
+  "2026-10-05": "대체공휴일",
+  "2026-10-09": "한글날",
+  "2026-12-25": "기독탄신일",
+};
+function getHoliday(dateStr) { return HOLIDAYS[dateStr] || null; }
+
 function renderMonthCalendar() {
   const year = _calMonth.getFullYear();
   const month = _calMonth.getMonth(); // 0~11
@@ -1063,6 +1095,11 @@ function renderMonthCalendar() {
     classes.push("clickable");
 
     const k = fmtDate(d);
+    const holidayName = getHoliday(k);
+    if (holidayName) classes.push("holiday");
+    const holidayHtml = holidayName
+      ? `<span class="cal-holiday-name" title="${escapeHtml(holidayName)}">${escapeHtml(holidayName)}</span>`
+      : "";
     // 연차 먼저, 근태 다음, 같은 종류 내에선 이름순
     const evts = (eventsByDate[k] || []).slice().sort((x, y) => {
       if (x.kind !== y.kind) return x.kind === "leave" ? -1 : 1;
@@ -1108,7 +1145,7 @@ function renderMonthCalendar() {
       evtHtml += `<span class="cal-more" title="이 날의 전체 일정 보기">+${moreCount}명 더보기</span>`;
     }
 
-    html += `<div class="${classes.join(" ")}" data-date="${k}"><div class="day">${d.getDate()}</div>${evtHtml}</div>`;
+    html += `<div class="${classes.join(" ")}" data-date="${k}"><div class="day">${d.getDate()}</div>${holidayHtml}${evtHtml}</div>`;
   }
   html += `</div>`;
   $("#calGrid").innerHTML = html;
