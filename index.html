@@ -248,6 +248,8 @@
   .cal-evt.att-absent { background: var(--red-500); color: white; }
   .cal-evt.att-sick   { background: #b39ddb; color: white; }
   .cal-evt.att-etc    { background: var(--gray-400); color: white; }
+  /* 회사 행사 (워크샵/회식) — 모두에게 표시, 보라색 계열로 구분 */
+  .cal-evt.event      { background: #7c5cdb; color: white; }
   /* '더보기' (하루 5명 이상일 때) */
   .cal-more {
     display: block; font-size: 11.5px; font-weight: 700;
@@ -582,6 +584,11 @@ const dbToInterview = (r) => r && ({
   title: r.title, content: r.content,
   createdAt: r.created_at, updatedAt: r.updated_at, createdBy: r.created_by,
 });
+// 회사 행사 ↔ JS
+const dbToEvent = (r) => r && ({
+  id: r.id, eventDate: r.event_date, eventType: r.event_type,
+  title: r.title, createdAt: r.created_at, createdBy: r.created_by,
+});
 const dbToReq = (r) => r && ({
   id: r.id, empNo: r.username, requestedAt: r.requested_at,
   startDate: r.start_date, endDate: r.end_date,
@@ -597,7 +604,7 @@ const dbToPolicy = (r) => r ? ({
 
 /* ------------------ 3. 저장 모듈 ------------------ */
 const Store = {
-  _cache: { employees: [], requests: [], policy: null, attendance: [], interviews: [] },
+  _cache: { employees: [], requests: [], policy: null, attendance: [], interviews: [], events: [] },
 
   async refresh() {
     // 1단계: 핵심 테이블 — 반드시 성공해야 앱이 동작
@@ -613,19 +620,22 @@ const Store = {
     this._cache.requests  = (reqsRes.data  || []).map(dbToReq);
     this._cache.policy    = dbToPolicy(polRes.data);
 
-    // 2단계: 부가 테이블 — v3 마이그레이션 미실행 시에도 앱은 계속 동작
+    // 2단계: 부가 테이블 — v3/v4 마이그레이션 미실행 시에도 앱은 계속 동작
     try {
-      const [attRes, intRes] = await Promise.all([
+      const [attRes, intRes, evtRes] = await Promise.all([
         sb.from("attendance_records").select("*").order("record_date", { ascending: false }),
         sb.from("interview_notes").select("*").order("meeting_date", { ascending: false }),
+        sb.from("company_events").select("*").order("event_date", { ascending: false }),
       ]);
       if (!attRes.error) this._cache.attendance  = (attRes.data || []).map(dbToAttendance);
       if (!intRes.error) this._cache.interviews  = (intRes.data || []).map(dbToInterview);
+      if (!evtRes.error) this._cache.events      = (evtRes.data || []).map(dbToEvent);
     } catch (e) {
       // 마이그레이션 전이면 그냥 빈 캐시로 둠
-      console.warn("v3 테이블 로드 실패 (마이그레이션 필요할 수 있음):", e);
+      console.warn("v3/v4 테이블 로드 실패 (마이그레이션 필요할 수 있음):", e);
       this._cache.attendance = [];
       this._cache.interviews = [];
+      this._cache.events = [];
     }
   },
 
@@ -638,6 +648,7 @@ const Store = {
   getAttendanceByEmp(empNo) {
     return this._cache.attendance.filter((a) => a.empNo === empNo);
   },
+  getEvents() { return this._cache.events; },
   getInterviewNotesByEmp(empNo) {
     return this._cache.interviews.filter((i) => i.empNo === empNo);
   },
@@ -692,6 +703,24 @@ const Store = {
     if ("recordDate" in patch) row.record_date = patch.recordDate;
     if (Object.keys(row).length === 0) return;
     const { error } = await sb.from("attendance_records").update(row).eq("id", id);
+    if (error) throw error;
+    await this.refresh();
+  },
+
+  // ----- 회사 행사 CRUD -----
+  async addEvent(ev) {
+    const cur = currentUser();
+    const { error } = await sb.from("company_events").insert({
+      event_date: ev.eventDate,
+      event_type: ev.eventType,
+      title: ev.title || null,
+      created_by: cur ? cur.empNo : null,
+    });
+    if (error) throw error;
+    await this.refresh();
+  },
+  async deleteEvent(id) {
+    const { error } = await sb.from("company_events").delete().eq("id", id);
     if (error) throw error;
     await this.refresh();
   },
@@ -1067,6 +1096,13 @@ function renderMonthCalendar() {
     });
   }
 
+  // 회사 행사 (워크샵/회식 등) — 전 직원에게 공개
+  Store.getEvents().forEach(ev => {
+    const k = ev.eventDate;
+    if (!eventsByDate[k]) eventsByDate[k] = [];
+    eventsByDate[k].push({ kind: "event", data: ev });
+  });
+
   $("#calTitle").textContent = `${year}년 ${month + 1}월`;
 
   // 그 달이 차지하는 주 수 계산 (4·5·6주)
@@ -1101,16 +1137,23 @@ function renderMonthCalendar() {
     const holidayHtml = holidayName
       ? `<span class="cal-holiday-name" title="${escapeHtml(holidayName)}">${escapeHtml(holidayName)}</span>`
       : "";
-    // 연차 먼저, 근태 다음, 같은 종류 내에선 이름순
+    // 행사 먼저, 연차 다음, 근태 마지막. 같은 종류 내에선 이름순(행사는 종류순)
+    const kindOrder = { event: 0, leave: 1, attendance: 2 };
     const evts = (eventsByDate[k] || []).slice().sort((x, y) => {
-      if (x.kind !== y.kind) return x.kind === "leave" ? -1 : 1;
+      if (x.kind !== y.kind) return kindOrder[x.kind] - kindOrder[y.kind];
+      if (x.kind === "event") return (x.data.eventType || "").localeCompare(y.data.eventType || "");
       return x.data.empNo.localeCompare(y.data.empNo);
     });
 
     let evtHtml = "";
     const MAX_VISIBLE_EVENTS = 4; // 달력 셀에 최대 4명까지만 표시
     evts.slice(0, MAX_VISIBLE_EVENTS).forEach(item => {
-      if (item.kind === "leave") {
+      if (item.kind === "event") {
+        const ev = item.data;
+        const typeLabel = eventTypeLabel(ev.eventType);
+        const label = `[${typeLabel}]${ev.title ? ev.title : ""}`.trim();
+        evtHtml += `<span class="cal-evt event" title="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
+      } else if (item.kind === "leave") {
         const r = item.data;
         const emp = Store.getEmployee(r.empNo);
         const name = emp ? emp.name : r.empNo;
@@ -1833,6 +1876,19 @@ function renderLeaveRowHtml(r) {
   `;
 }
 
+function renderEventRowHtml(ev, isAdmin) {
+  const label = eventTypeLabel(ev.eventType);
+  const del = isAdmin
+    ? `<button class="btn ghost xs" data-event-action="delete" data-event-id="${ev.id}" style="color:var(--red-500);">삭제</button>`
+    : "";
+  return `
+    <div style="padding:12px 14px; border-bottom:1px solid var(--gray-100); display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; text-align:center;">
+      <div style="flex:0 0 70px; font-size:12.5px; font-weight:700; color:#7c5cdb;">[${escapeHtml(label)}]</div>
+      <div style="flex:1; min-width:120px; font-size:13px; color:var(--gray-600);">${ev.title ? escapeHtml(ev.title) : "—"}</div>
+      ${del}
+    </div>`;
+}
+
 function renderAttRowHtml(r, employees) {
   const emp = Store.getEmployee(r.empNo);
   const name = emp ? emp.name : r.empNo;
@@ -1914,20 +1970,31 @@ function renderDayAttendanceModal(dateStr) {
       <div style="border:1px solid var(--gray-200); border-radius:8px; overflow:hidden;">${records.map(r => renderAttRowHtml(r, employees)).join("")}</div>
     </div>`;
 
+  // 회사 행사 (워크샵/회식) — 전 직원에게 표시
+  const dayEvents = Store.getEvents()
+    .filter(ev => ev.eventDate === dateStr)
+    .sort((a, b) => (a.eventType || "").localeCompare(b.eventType || ""));
+  const eventsHtml = dayEvents.length === 0 ? "" : `
+    <div style="margin-bottom:18px;">
+      <div style="font-size:12px; color:var(--gray-600); font-weight:600; margin-bottom:8px;">회사 행사 (${dayEvents.length}건)</div>
+      <div style="border:1px solid var(--gray-200); border-radius:8px; overflow:hidden;">${dayEvents.map(ev => renderEventRowHtml(ev, isAdmin)).join("")}</div>
+    </div>`;
+
   // 위 섹션이 하나라도 있으면 추가 폼 위에 구분선
-  const addFormStyle = (visibleLeaves.length || records.length) ? "border-top:1px solid var(--gray-200); padding-top:18px;" : "";
+  const addFormStyle = (visibleLeaves.length || records.length || dayEvents.length) ? "border-top:1px solid var(--gray-200); padding-top:18px;" : "";
 
   $("#modalBody").innerHTML = `
     <h3>${dateStr} (${wd}) 일정</h3>
+    ${eventsHtml}
     ${leavesHtml}
     ${recordsHtml}
 
     ${isAdmin ? `
     <div style="${addFormStyle}">
-      <div style="font-weight:600; font-size:13px; margin-bottom:10px;">+ 일정 추가</div>
+      <div style="font-weight:600; font-size:13px; margin-bottom:10px;">+ 근태 기록</div>
       <form id="dayAddForm">
         <div class="form-row cols-3">
-          <div class="form-group">
+          <div class="form-group" id="addEmpGroup">
             <label>직원 *</label>
             <select id="addEmp" required>
               <option value="">-- 선택 --</option>
@@ -1947,6 +2014,11 @@ function renderDayAttendanceModal(dateStr) {
                 <option value="att:absent">결근</option>
                 <option value="att:sick">병가</option>
                 <option value="att:etc">기타</option>
+              </optgroup>
+              <optgroup label="회사 행사">
+                <option value="ev:workshop">워크샵</option>
+                <option value="ev:dinner">회식</option>
+                <option value="ev:etc">기타 행사</option>
               </optgroup>
             </select>
           </div>
@@ -2006,14 +2078,19 @@ function renderDayAttendanceModal(dateStr) {
   `;
 
   if (isAdmin) {
-    // 통합 추가 폼: 유형(연차/반차 또는 근태)에 따라 UI 토글
+    // 통합 추가 폼: 유형(연차/반차 · 근태 · 회사 행사)에 따라 UI 토글
     const updateAddFormUI = () => {
       const kind = $("#addKind").value;
       const isLeave = kind.startsWith("lv:");
+      const isEvent = kind.startsWith("ev:");
       const isEtc = kind === "att:etc";
+      // 회사 행사는 직원/상태가 필요 없음
+      $("#addEmpGroup").style.display = isEvent ? "none" : "";
+      $("#addEmp").required = !isEvent;
       $("#addStatusGroup").style.display = isLeave ? "" : "none";
-      $("#addReasonText").textContent = isLeave ? "사유" : "비고";
-      $("#addReason").placeholder = isLeave ? "예: 개인 사유" : "예: 30분 지각, 사전 연락 없음";
+      $("#addReasonText").textContent = isLeave ? "사유" : isEvent ? "행사명 / 메모" : "비고";
+      $("#addReason").placeholder = isLeave ? "예: 개인 사유"
+        : isEvent ? "예: 분기 워크샵 (양평 펜션)" : "예: 30분 지각, 사전 연락 없음";
       $("#addReasonReq").style.display = isEtc ? "" : "none";
       $("#addReasonHint").style.display = isEtc ? "" : "none";
     };
@@ -2026,6 +2103,20 @@ function renderDayAttendanceModal(dateStr) {
       const empNo = $("#addEmp").value;
       const kind = $("#addKind").value;
       const reason = $("#addReason").value.trim();
+
+      if (kind.startsWith("ev:")) {
+        // 회사 행사 등록 (직원 선택 불필요)
+        const eventType = kind.slice(3);         // "workshop" | "dinner" | "etc"
+        try {
+          await Store.addEvent({ eventDate: dateStr, eventType, title: reason || null });
+          renderMonthCalendar();
+          renderDayAttendanceModal(dateStr);
+        } catch (err) {
+          alert("추가 실패: " + (err.message || err));
+        }
+        return;
+      }
+
       if (!empNo) { alert("직원을 선택해 주세요."); return; }
 
       if (kind.startsWith("lv:")) {
@@ -2135,6 +2226,21 @@ function renderDayAttendanceModal(dateStr) {
         }
       } catch (err) {
         alert("처리 실패: " + (err.message || err));
+      }
+    });
+  });
+
+  // 회사 행사 삭제 (관리자)
+  $("#modalBody").querySelectorAll("[data-event-action]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      if (btn.dataset.eventAction !== "delete") return;
+      if (!confirm("이 행사를 삭제할까요? 되돌릴 수 없습니다.")) return;
+      try {
+        await Store.deleteEvent(btn.dataset.eventId);
+        renderMonthCalendar();
+        renderDayAttendanceModal(dateStr);
+      } catch (err) {
+        alert("삭제 실패: " + (err.message || err));
       }
     });
   });
@@ -2252,6 +2358,9 @@ function attTypeLabel(t) {
 function attTypeBadge(t) {
   const cls = t === "late" ? "att-late" : t === "absent" ? "att-absent" : t === "sick" ? "att-sick" : "att-etc";
   return `<span class="badge ${cls}">${attTypeLabel(t)}</span>`;
+}
+function eventTypeLabel(t) {
+  return t === "workshop" ? "워크샵" : t === "dinner" ? "회식" : t === "etc" ? "행사" : t;
 }
 
 function renderAttendanceTab(empNo) {
