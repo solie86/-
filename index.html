@@ -240,6 +240,13 @@
   .cal-evt.att-absent { background: var(--red-500); color: white; }
   .cal-evt.att-sick   { background: #b39ddb; color: white; }
   .cal-evt.att-etc    { background: var(--gray-400); color: white; }
+  /* '더보기' (하루 5명 이상일 때) */
+  .cal-more {
+    display: block; font-size: 11.5px; font-weight: 700;
+    color: var(--navy-700); padding: 2px 4px; margin-top: 1px;
+    cursor: pointer; border-radius: 3px;
+  }
+  .cal-more:hover { background: var(--gray-100); text-decoration: underline; }
   /* 관리자가 셀에 호버하면 클릭 가능한 느낌을 줌 */
   .cal-cell.clickable { cursor: pointer; }
   .cal-cell.clickable:hover { background: #f4f8ff; }
@@ -992,13 +999,20 @@ function renderMonthCalendar() {
   const isAdmin = cu && cu.role === "admin";
 
   // 날짜별 이벤트 매핑
-  // - 연차/반차/대기는 전 직원에게 표시 (모든 사용자가 봄)
+  // - 승인된 연차/반차는 전 직원에게 표시
+  // - 대기 중 신청은 관리자에게만 전체 표시 / 직원에겐 본인 것만 표시
   // - 근태기록(지각/결근/병가/기타)은 관리자에게만 표시 (개인정보)
   const eventsByDate = {};
 
-  // 연차 신청 — 승인 + 대기 (반려는 제외)
+  // 연차 신청 필터
   Store.getRequests()
-    .filter(r => r.status === "approved" || r.status === "pending")
+    .filter(r => {
+      if (r.status === "approved") return true;
+      if (r.status === "pending") {
+        return isAdmin || (cu && r.empNo === cu.empNo);
+      }
+      return false;
+    })
     .forEach(r => {
       const s = parseLocalDate(r.startDate);
       const e = parseLocalDate(r.endDate);
@@ -1056,7 +1070,8 @@ function renderMonthCalendar() {
     });
 
     let evtHtml = "";
-    evts.forEach(item => {
+    const MAX_VISIBLE_EVENTS = 4; // 달력 셀에 최대 4명까지만 표시
+    evts.slice(0, MAX_VISIBLE_EVENTS).forEach(item => {
       if (item.kind === "leave") {
         const r = item.data;
         const emp = Store.getEmployee(r.empNo);
@@ -1086,6 +1101,12 @@ function renderMonthCalendar() {
         evtHtml += `<span class="cal-evt ${cls}" title="${escapeHtml(tooltip)}">${escapeHtml(label)}</span>`;
       }
     });
+
+    // 5명 이상이면 '더보기' 표시 (셀 클릭 시 그날 전체 일정 모달이 열림)
+    if (evts.length > MAX_VISIBLE_EVENTS) {
+      const moreCount = evts.length - MAX_VISIBLE_EVENTS;
+      evtHtml += `<span class="cal-more" title="이 날의 전체 일정 보기">+${moreCount}명 더보기</span>`;
+    }
 
     html += `<div class="${classes.join(" ")}" data-date="${k}"><div class="day">${d.getDate()}</div>${evtHtml}</div>`;
   }
