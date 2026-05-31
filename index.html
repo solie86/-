@@ -1924,27 +1924,35 @@ function renderDayAttendanceModal(dateStr) {
 
     ${isAdmin ? `
     <div style="${addFormStyle}">
-      <div style="font-weight:600; font-size:13px; margin-bottom:10px;">+ 새 연차/반차 추가</div>
-      <form id="dayLeaveAddForm" style="margin-bottom:22px;">
+      <div style="font-weight:600; font-size:13px; margin-bottom:10px;">+ 일정 추가</div>
+      <form id="dayAddForm">
         <div class="form-row cols-3">
           <div class="form-group">
             <label>직원 *</label>
-            <select id="addLvEmp" required>
+            <select id="addEmp" required>
               <option value="">-- 선택 --</option>
               ${employees.map(e => `<option value="${escapeHtml(e.empNo)}">${escapeHtml(e.name)}</option>`).join("")}
             </select>
           </div>
           <div class="form-group">
-            <label>단위 *</label>
-            <select id="addLvUnit" required>
-              <option value="full">연차 (1일)</option>
-              <option value="am">오전반차 (0.5일)</option>
-              <option value="pm">오후반차 (0.5일)</option>
+            <label>유형 *</label>
+            <select id="addKind" required>
+              <optgroup label="연차 · 반차">
+                <option value="lv:full">연차 (1일)</option>
+                <option value="lv:am">오전반차 (0.5일)</option>
+                <option value="lv:pm">오후반차 (0.5일)</option>
+              </optgroup>
+              <optgroup label="근태 기록">
+                <option value="att:late">지각</option>
+                <option value="att:absent">결근</option>
+                <option value="att:sick">병가</option>
+                <option value="att:etc">기타</option>
+              </optgroup>
             </select>
           </div>
-          <div class="form-group">
+          <div class="form-group" id="addStatusGroup">
             <label>상태 *</label>
-            <select id="addLvStatus" required>
+            <select id="addStatus">
               <option value="approved">즉시 승인</option>
               <option value="pending">대기로 등록</option>
             </select>
@@ -1952,40 +1960,9 @@ function renderDayAttendanceModal(dateStr) {
         </div>
         <div class="form-row cols-1">
           <div class="form-group">
-            <label>사유</label>
-            <input type="text" id="addLvReason" placeholder="예: 개인 사유" />
-          </div>
-        </div>
-        <div style="display:flex; justify-content:flex-end;">
-          <button type="submit" class="btn green sm">+ 추가</button>
-        </div>
-      </form>
-
-      <div style="font-weight:600; font-size:13px; margin-bottom:10px; padding-top:18px; border-top:1px solid var(--gray-200);">+ 새 근태 기록 추가</div>
-      <form id="dayAttAddForm">
-        <div class="form-row">
-          <div class="form-group">
-            <label>직원 *</label>
-            <select id="addAttEmp" required>
-              <option value="">-- 선택 --</option>
-              ${employees.map(e => `<option value="${escapeHtml(e.empNo)}">${escapeHtml(e.name)}</option>`).join("")}
-            </select>
-          </div>
-          <div class="form-group">
-            <label>유형 *</label>
-            <select id="addAttType" required>
-              <option value="late">지각</option>
-              <option value="absent">결근</option>
-              <option value="sick">병가</option>
-              <option value="etc">기타</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row cols-1">
-          <div class="form-group">
-            <label>비고 <span id="addAttNoteReq" style="color:var(--red-500); display:none;">*</span></label>
-            <input type="text" id="addAttNote" placeholder="예: 30분 지각, 사전 연락 없음" />
-            <div class="hint" id="addAttNoteHint" style="display:none;">기타 유형은 비고가 필수입니다.</div>
+            <label><span id="addReasonText">사유</span> <span id="addReasonReq" style="color:var(--red-500); display:none;">*</span></label>
+            <input type="text" id="addReason" placeholder="예: 개인 사유" />
+            <div class="hint" id="addReasonHint" style="display:none;">기타 유형은 비고가 필수입니다.</div>
           </div>
         </div>
         <div style="display:flex; justify-content:flex-end;">
@@ -2029,70 +2006,67 @@ function renderDayAttendanceModal(dateStr) {
   `;
 
   if (isAdmin) {
-    // 연차/반차 추가 폼 제출 (관리자 직접 등록)
-    $("#dayLeaveAddForm").addEventListener("submit", async (e) => {
+    // 통합 추가 폼: 유형(연차/반차 또는 근태)에 따라 UI 토글
+    const updateAddFormUI = () => {
+      const kind = $("#addKind").value;
+      const isLeave = kind.startsWith("lv:");
+      const isEtc = kind === "att:etc";
+      $("#addStatusGroup").style.display = isLeave ? "" : "none";
+      $("#addReasonText").textContent = isLeave ? "사유" : "비고";
+      $("#addReason").placeholder = isLeave ? "예: 개인 사유" : "예: 30분 지각, 사전 연락 없음";
+      $("#addReasonReq").style.display = isEtc ? "" : "none";
+      $("#addReasonHint").style.display = isEtc ? "" : "none";
+    };
+    $("#addKind").addEventListener("change", updateAddFormUI);
+    updateAddFormUI();
+
+    // 통합 추가 폼: 제출 — 유형에 따라 연차/반차 또는 근태 기록으로 분기
+    $("#dayAddForm").addEventListener("submit", async (e) => {
       e.preventDefault();
-      const empNo = $("#addLvEmp").value;
-      const unit = $("#addLvUnit").value;     // "full" | "am" | "pm"
-      const status = $("#addLvStatus").value; // "approved" | "pending"
-      const reason = $("#addLvReason").value.trim();
+      const empNo = $("#addEmp").value;
+      const kind = $("#addKind").value;
+      const reason = $("#addReason").value.trim();
       if (!empNo) { alert("직원을 선택해 주세요."); return; }
-      const days = unit === "full" ? 1 : 0.5;
-      const halfDayPart = unit === "am" ? "AM" : unit === "pm" ? "PM" : null;
-      // 즉시 승인 시 잔여 부족하면 확인
-      if (status === "approved") {
-        const emp = Store.getEmployee(empNo);
-        const bal = calcBalance(emp);
-        if (days > bal.remaining) {
-          if (!confirm(`해당 직원의 잔여 연차(${bal.remaining}일)보다 신청 일수(${days}일)가 많습니다. 그래도 등록할까요?`)) return;
+
+      if (kind.startsWith("lv:")) {
+        // 연차/반차 등록
+        const unit = kind.slice(3);              // "full" | "am" | "pm"
+        const status = $("#addStatus").value;    // "approved" | "pending"
+        const days = unit === "full" ? 1 : 0.5;
+        const halfDayPart = unit === "am" ? "AM" : unit === "pm" ? "PM" : null;
+        if (status === "approved") {
+          const emp = Store.getEmployee(empNo);
+          const bal = calcBalance(emp);
+          if (days > bal.remaining) {
+            if (!confirm(`해당 직원의 잔여 연차(${bal.remaining}일)보다 신청 일수(${days}일)가 많습니다. 그래도 등록할까요?`)) return;
+          }
         }
-      }
-      try {
-        await Store.adminAddRequest({
-          empNo,
-          startDate: dateStr,
-          endDate: dateStr,
-          days,
-          halfDayPart,
-          reason: reason || null,
-          status,
-        });
-        renderMonthCalendar();
-        renderDayAttendanceModal(dateStr);
-      } catch (err) {
-        alert("추가 실패: " + (err.message || err));
-      }
-    });
-
-    // 근태 추가 폼: 유형 변경에 따라 비고 필수 표시 토글
-    $("#addAttType").addEventListener("change", () => {
-      const isEtc = $("#addAttType").value === "etc";
-      $("#addAttNoteReq").style.display = isEtc ? "" : "none";
-      $("#addAttNoteHint").style.display = isEtc ? "" : "none";
-    });
-
-    // 근태 추가 폼: 제출
-    $("#dayAttAddForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const empNo = $("#addAttEmp").value;
-      const recordType = $("#addAttType").value;
-      const note = $("#addAttNote").value.trim();
-      if (!empNo) { alert("직원을 선택해 주세요."); return; }
-      if (recordType === "etc" && !note) {
-        alert("기타 유형은 비고를 반드시 입력해 주세요.");
-        return;
-      }
-      try {
-        await Store.addAttendance({
-          empNo,
-          recordDate: dateStr,
-          recordType,
-          note: note || null,
-        });
-        renderMonthCalendar();        // 달력 갱신 (배경)
-        renderDayAttendanceModal(dateStr); // 모달 재렌더링
-      } catch (err) {
-        alert("추가 실패: " + (err.message || err));
+        try {
+          await Store.adminAddRequest({
+            empNo, startDate: dateStr, endDate: dateStr,
+            days, halfDayPart, reason: reason || null, status,
+          });
+          renderMonthCalendar();
+          renderDayAttendanceModal(dateStr);
+        } catch (err) {
+          alert("추가 실패: " + (err.message || err));
+        }
+      } else {
+        // 근태 기록 등록
+        const recordType = kind.slice(4);        // "late" | "absent" | "sick" | "etc"
+        if (recordType === "etc" && !reason) {
+          alert("기타 유형은 비고를 반드시 입력해 주세요.");
+          return;
+        }
+        try {
+          await Store.addAttendance({
+            empNo, recordDate: dateStr, recordType, note: reason || null,
+          });
+          renderMonthCalendar();
+          renderDayAttendanceModal(dateStr);
+        } catch (err) {
+          alert("추가 실패: " + (err.message || err));
+        }
       }
     });
   } else {
