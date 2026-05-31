@@ -218,7 +218,7 @@
     background: var(--gray-50); padding: 10px 6px;
   }
   .cal-head.sun, .cal-head.sat { color: var(--red-500); }
-  .cal-cell { padding: 8px 8px 10px; min-height: 130px; }
+  .cal-cell { padding: 8px 8px 10px; height: 172px; overflow: hidden; }
   .cal-cell .day { font-size: 13px; color: var(--gray-600); margin-bottom: 6px; }
   .cal-cell.other-month { background: #fafbfd; }
   .cal-cell.other-month .day { color: var(--gray-400); }
@@ -255,7 +255,7 @@
   .cal-legend span { display: inline-flex; align-items: center; gap: 6px; }
   .cal-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
   @media (max-width: 768px) {
-    .cal-cell { min-height: 85px; padding: 5px; }
+    .cal-cell { height: 126px; padding: 5px; }
     .cal-evt { font-size: 11px; padding: 2px 5px; }
     .cal-cell .day { font-size: 12px; }
     .cal-head { font-size: 12px; padding: 8px 4px; }
