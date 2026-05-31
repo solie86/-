@@ -248,8 +248,8 @@
   .cal-evt.att-absent { background: var(--red-500); color: white; }
   .cal-evt.att-sick   { background: #b39ddb; color: white; }
   .cal-evt.att-etc    { background: var(--gray-400); color: white; }
-  /* 회사 행사 (워크샵/회식) — 모두에게 표시, 보라색 계열로 구분 */
-  .cal-evt.event      { background: #7c5cdb; color: white; }
+  /* 회사 행사 (워크샵/회식) — 모두에게 표시, 이모지로 구분 (중립 배경) */
+  .cal-evt.event      { background: var(--gray-100); color: var(--gray-800); font-weight: 700; }
   /* '더보기' (하루 5명 이상일 때) */
   .cal-more {
     display: block; font-size: 11.5px; font-weight: 700;
@@ -1150,9 +1150,9 @@ function renderMonthCalendar() {
     evts.slice(0, MAX_VISIBLE_EVENTS).forEach(item => {
       if (item.kind === "event") {
         const ev = item.data;
-        const typeLabel = eventTypeLabel(ev.eventType);
-        const label = `[${typeLabel}]${ev.title ? ev.title : ""}`.trim();
-        evtHtml += `<span class="cal-evt event" title="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
+        const emoji = eventTypeEmoji(ev.eventType);
+        const text = `${eventTypeLabel(ev.eventType)}${ev.title ? " " + ev.title : ""}`;
+        evtHtml += `<span class="cal-evt event" title="${escapeHtml(text)}">${emoji} ${escapeHtml(text)}</span>`;
       } else if (item.kind === "leave") {
         const r = item.data;
         const emp = Store.getEmployee(r.empNo);
@@ -1878,12 +1878,13 @@ function renderLeaveRowHtml(r) {
 
 function renderEventRowHtml(ev, isAdmin) {
   const label = eventTypeLabel(ev.eventType);
+  const emoji = eventTypeEmoji(ev.eventType);
   const del = isAdmin
     ? `<button class="btn ghost xs" data-event-action="delete" data-event-id="${ev.id}" style="color:var(--red-500);">삭제</button>`
     : "";
   return `
     <div style="padding:12px 14px; border-bottom:1px solid var(--gray-100); display:flex; align-items:center; justify-content:center; gap:10px; flex-wrap:wrap; text-align:center;">
-      <div style="flex:0 0 70px; font-size:12.5px; font-weight:700; color:#7c5cdb;">[${escapeHtml(label)}]</div>
+      <div style="flex:0 0 90px; font-size:13px; font-weight:700;">${emoji} ${escapeHtml(label)}</div>
       <div style="flex:1; min-width:120px; font-size:13px; color:var(--gray-600);">${ev.title ? escapeHtml(ev.title) : "—"}</div>
       ${del}
     </div>`;
@@ -2015,11 +2016,6 @@ function renderDayAttendanceModal(dateStr) {
                 <option value="att:sick">병가</option>
                 <option value="att:etc">기타</option>
               </optgroup>
-              <optgroup label="회사 행사">
-                <option value="ev:workshop">워크샵</option>
-                <option value="ev:dinner">회식</option>
-                <option value="ev:etc">기타 행사</option>
-              </optgroup>
             </select>
           </div>
           <div class="form-group" id="addStatusGroup">
@@ -2041,6 +2037,29 @@ function renderDayAttendanceModal(dateStr) {
           <button type="submit" class="btn green sm">+ 추가</button>
         </div>
       </form>
+
+      <div style="border-top:1px solid var(--gray-200); margin-top:18px; padding-top:18px;">
+        <div style="font-weight:600; font-size:13px; margin-bottom:10px;">+ 회사 행사</div>
+        <form id="dayEventAddForm">
+          <div class="form-row">
+            <div class="form-group">
+              <label>유형 *</label>
+              <select id="addEvtType" required>
+                <option value="workshop">🏕️ 워크샵</option>
+                <option value="dinner">🍺 회식</option>
+                <option value="etc">🎉 기타 행사</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>행사명 / 메모</label>
+              <input type="text" id="addEvtTitle" placeholder="예: 분기 워크샵 (양평 펜션)" />
+            </div>
+          </div>
+          <div style="display:flex; justify-content:flex-end;">
+            <button type="submit" class="btn green sm">+ 추가</button>
+          </div>
+        </form>
+      </div>
     </div>
     ` : (function(){
         const policy = Store.getPolicy();
@@ -2078,19 +2097,14 @@ function renderDayAttendanceModal(dateStr) {
   `;
 
   if (isAdmin) {
-    // 통합 추가 폼: 유형(연차/반차 · 근태 · 회사 행사)에 따라 UI 토글
+    // 통합 추가 폼: 유형(연차/반차 · 근태)에 따라 UI 토글
     const updateAddFormUI = () => {
       const kind = $("#addKind").value;
       const isLeave = kind.startsWith("lv:");
-      const isEvent = kind.startsWith("ev:");
       const isEtc = kind === "att:etc";
-      // 회사 행사는 직원/상태가 필요 없음
-      $("#addEmpGroup").style.display = isEvent ? "none" : "";
-      $("#addEmp").required = !isEvent;
       $("#addStatusGroup").style.display = isLeave ? "" : "none";
-      $("#addReasonText").textContent = isLeave ? "사유" : isEvent ? "행사명 / 메모" : "비고";
-      $("#addReason").placeholder = isLeave ? "예: 개인 사유"
-        : isEvent ? "예: 분기 워크샵 (양평 펜션)" : "예: 30분 지각, 사전 연락 없음";
+      $("#addReasonText").textContent = isLeave ? "사유" : "비고";
+      $("#addReason").placeholder = isLeave ? "예: 개인 사유" : "예: 30분 지각, 사전 연락 없음";
       $("#addReasonReq").style.display = isEtc ? "" : "none";
       $("#addReasonHint").style.display = isEtc ? "" : "none";
     };
@@ -2103,20 +2117,6 @@ function renderDayAttendanceModal(dateStr) {
       const empNo = $("#addEmp").value;
       const kind = $("#addKind").value;
       const reason = $("#addReason").value.trim();
-
-      if (kind.startsWith("ev:")) {
-        // 회사 행사 등록 (직원 선택 불필요)
-        const eventType = kind.slice(3);         // "workshop" | "dinner" | "etc"
-        try {
-          await Store.addEvent({ eventDate: dateStr, eventType, title: reason || null });
-          renderMonthCalendar();
-          renderDayAttendanceModal(dateStr);
-        } catch (err) {
-          alert("추가 실패: " + (err.message || err));
-        }
-        return;
-      }
-
       if (!empNo) { alert("직원을 선택해 주세요."); return; }
 
       if (kind.startsWith("lv:")) {
@@ -2158,6 +2158,20 @@ function renderDayAttendanceModal(dateStr) {
         } catch (err) {
           alert("추가 실패: " + (err.message || err));
         }
+      }
+    });
+
+    // 회사 행사 추가 폼 제출 (별도)
+    $("#dayEventAddForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const eventType = $("#addEvtType").value;     // "workshop" | "dinner" | "etc"
+      const title = $("#addEvtTitle").value.trim();
+      try {
+        await Store.addEvent({ eventDate: dateStr, eventType, title: title || null });
+        renderMonthCalendar();
+        renderDayAttendanceModal(dateStr);
+      } catch (err) {
+        alert("추가 실패: " + (err.message || err));
       }
     });
   } else {
@@ -2361,6 +2375,9 @@ function attTypeBadge(t) {
 }
 function eventTypeLabel(t) {
   return t === "workshop" ? "워크샵" : t === "dinner" ? "회식" : t === "etc" ? "행사" : t;
+}
+function eventTypeEmoji(t) {
+  return t === "workshop" ? "🏕️" : t === "dinner" ? "🍺" : t === "etc" ? "🎉" : "📌";
 }
 
 function renderAttendanceTab(empNo) {
