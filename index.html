@@ -477,16 +477,29 @@ const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 /* ------------------ 0-1. 텔레그램 알림 설정 ------------------
-   * 신청 등록 시 관리자 텔레그램으로 알림 전송
-   * 추후 관리자 여러 명에게 보내려면 TELEGRAM_ADMIN_CHAT_IDS 배열에 추가
-   * 토큰이 노출되어도 본 봇은 메시지 전송 권한만 있어 위험도는 낮음
+   * 신청 등록 시 텔레그램 chat_id가 등록된 모든 직원에게 알림 전송
+   * 수신자 추가/삭제: [직원 관리] → 직원 [수정] → "텔레그램 Chat ID" 칸에서 처리
+   *   - 본인이 봇에게 /start 보낸 뒤 https://api.telegram.org/bot<TOKEN>/getUpdates 의
+   *     "chat":{"id": ...} 값을 그대로 입력
+   * FALLBACK_CHAT_IDS: DB에 등록된 사람이 0명일 때만 사용 (기존 운영 보장용)
    ----------------------------------------------------------- */
 const TELEGRAM_BOT_TOKEN = "8943983356:AAHH5fJdbSX0ZD2Fk5d7I9fms_oYoDm6pcA";
-const TELEGRAM_ADMIN_CHAT_IDS = ["8808458319"]; // Solie Park
+const TELEGRAM_FALLBACK_CHAT_IDS = ["8808458319"]; // Solie Park (DB 비어 있을 때만)
+
+function collectTelegramChatIds() {
+  // 직원 마스터에서 telegram_chat_id가 있는 사람 모두 수집 (중복 제거)
+  const ids = (Store.getEmployees() || [])
+    .map((e) => (e.telegramChatId || "").trim())
+    .filter(Boolean);
+  const unique = Array.from(new Set(ids));
+  return unique.length > 0 ? unique : TELEGRAM_FALLBACK_CHAT_IDS;
+}
 
 async function notifyTelegram(text) {
-  if (!TELEGRAM_BOT_TOKEN || TELEGRAM_ADMIN_CHAT_IDS.length === 0) return;
-  for (const chatId of TELEGRAM_ADMIN_CHAT_IDS) {
+  if (!TELEGRAM_BOT_TOKEN) return;
+  const chatIds = collectTelegramChatIds();
+  if (chatIds.length === 0) return;
+  for (const chatId of chatIds) {
     try {
       await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
         method: "POST",
@@ -564,11 +577,13 @@ const dbToEmp = (r) => r && ({
   hireDate: r.hire_date, position: r.position, department: r.department,
   passwordHash: r.password_hash, role: r.role,
   leaveAdjustment: Number(r.leave_adjustment || 0),
+  telegramChatId: r.telegram_chat_id || null,
 });
 const empToDb = (e) => ({
   username: e.empNo, name: e.name, email: e.email, phone: e.phone,
   hire_date: e.hireDate, position: e.position, department: e.department,
   password_hash: e.passwordHash, role: e.role,
+  telegram_chat_id: e.telegramChatId || null,
 });
 
 // 근태기록 ↔ JS
@@ -670,6 +685,7 @@ const Store = {
     if ("department" in patch) row.department = patch.department;
     if ("role" in patch) row.role = patch.role;
     if ("leaveAdjustment" in patch) row.leave_adjustment = patch.leaveAdjustment;
+    if ("telegramChatId" in patch) row.telegram_chat_id = patch.telegramChatId || null;
     if ("empNo" in patch) row.username = patch.empNo; // 아이디 변경
     if (Object.keys(row).length === 0) return;
     const { error } = await sb.from("employees").update(row).eq("username", currentUsername);
@@ -1497,7 +1513,10 @@ pages.employees = function () {
             return `<tr class="emp-row" data-emp-no="${escapeHtml(e.empNo)}" title="클릭하면 직원 상세 정보를 볼 수 있습니다">
               <td><strong>${escapeHtml(e.name)}</strong></td>
               <td>${e.position ? escapeHtml(e.position) : blank}</td>
-              <td><span class="badge role ${e.role === "admin" ? "admin" : ""}">${e.role === "admin" ? "관리자" : "직원"}</span></td>
+              <td>
+                <span class="badge role ${e.role === "admin" ? "admin" : ""}">${e.role === "admin" ? "관리자" : "직원"}</span>
+                ${e.telegramChatId ? `<span title="텔레그램 알림 수신" style="margin-left:4px;">🔔</span>` : ``}
+              </td>
               <td>${e.email ? escapeHtml(e.email) : blank}</td>
               <td>${e.phone ? escapeHtml(e.phone) : blank}</td>
             </tr>`;
@@ -1647,7 +1666,11 @@ function openAddEmployeeModal() {
       </div>
       <div class="form-row">
         <div class="form-group"><label>초기 비밀번호 *</label><input id="newPw" type="text" required placeholder="최소 4자" /></div>
-        <div class="form-group"></div>
+        <div class="form-group">
+          <label>텔레그램 Chat ID</label>
+          <input id="newTg" placeholder="예: 8808458319 (비워두면 알림 안 받음)" autocomplete="off" />
+          <div class="hint">신청 알림을 받을 사람만 입력. 봇에 /start 후 getUpdates의 chat.id 값.</div>
+        </div>
       </div>
       <div class="actions">
         <button type="button" class="btn ghost" id="closeModal">취소</button>
@@ -1682,6 +1705,7 @@ function openAddEmployeeModal() {
         position: null,
         role: $("#newRole").value,
         passwordHash: await hashPassword(pw),
+        telegramChatId: ($("#newTg") && $("#newTg").value.trim()) || null,
       });
       closeModal();
       navigate("employees");
@@ -1723,7 +1747,11 @@ function openEditEmployeeModal(empNo) {
       </div>
       <div class="form-row">
         <div class="form-group"><label>직급</label><input id="edPosition" type="text" value="${escapeHtml(emp.position || '')}" placeholder="예: 매니저, 사원, 팀장" autocomplete="off" /></div>
-        <div class="form-group"></div>
+        <div class="form-group">
+          <label>텔레그램 Chat ID</label>
+          <input id="edTg" value="${escapeHtml(emp.telegramChatId || '')}" placeholder="예: 8808458319" autocomplete="off" />
+          <div class="hint">값이 있으면 연차 신청 발생 시 이 직원에게 알림 전송.</div>
+        </div>
       </div>
       <div class="actions">
         <button type="button" class="btn ghost" id="closeModal">취소</button>
@@ -1755,6 +1783,7 @@ function openEditEmployeeModal(empNo) {
         hireDate: $("#edHire").value,
         role: $("#edRole").value,
         position: $("#edPosition").value.trim() || null,
+        telegramChatId: ($("#edTg") && $("#edTg").value.trim()) || null,
       };
       if (newU !== emp.empNo) patch.empNo = newU;
 
