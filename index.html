@@ -904,10 +904,13 @@ const Store = {
    상세 정책값은 policy 테이블에서 조정 가능
    ----------------------------------------------------------------- */
 
-// 입사월 기반 비례연차 = base × (12 - 입사월 + 1) / 12
+// 입사월 기반 비례연차 = base × (입사월부터 12월까지 개월수) / 12
+//   = "입사월 포함 그 해 남은 개월수"에 비례 (표준 노동법 해석)
+//   예) 5월 입사 → 8/12 × 15 = 10
+//       7월 입사 → 6/12 × 15 = 7.5
 function calcProportionalDays(hireDate, baseDays) {
   const hireMonth = hireDate.getMonth() + 1; // 1~12
-  const monthsInFirstYear = 12 - hireMonth + 1; // 입사월 포함 그 해 남은 개월
+  const monthsInFirstYear = 12 - hireMonth + 1; // 입사월 포함 12월까지
   const days = baseDays * monthsInFirstYear / 12;
   // 0.5 단위로 반올림
   return Math.round(days * 2) / 2;
@@ -943,11 +946,17 @@ function calcGrantedForYear(emp, year, asOf = today()) {
 
   if (year < annivYear) {
     // ---- (A) 입사한 해 (=만 1년 미만, 월차만) ----
-    // 매월 1일에 전월 만근 월차 1개 적립
-    for (let m = hireDate.getMonth() + 1; m < 12; m++) {
+    // 첫 월차 발생 월:
+    //   - 입사일이 매월 1일이면 → 입사 다음 달 1일 (입사월 만근으로 인정)
+    //   - 그 외 (월 중간 입사) → 그 다음 달 1일 (입사월 만근으로 인정 안 함)
+    //   예) 7/1 입사 → 8/1 첫 월차 (7월 만근)
+    //       5/19 입사 → 7/1 첫 월차 (6월이 첫 만근 가능 월)
+    const firstAccrualMonth = hireDate.getDate() === 1
+      ? hireDate.getMonth() + 1
+      : hireDate.getMonth() + 2;
+    for (let m = firstAccrualMonth; m < 12; m++) {
       const eventDate = new Date(year, m, 1);
       if (eventDate > ref) break;
-      // 전월(m-1)이 입사월 이후이고 만근 했다는 가정
       granted += policy.monthlyAccrual;
     }
     return granted;
@@ -955,13 +964,17 @@ function calcGrantedForYear(emp, year, asOf = today()) {
 
   if (year === annivYear) {
     // ---- (B) 만 1주년 도달 해 ----
+    // 예외: 1월 1일 입사자는 anniv가 회계연도 시작과 일치 → 정상 부여 (case C와 동일)
+    if (anniv.getMonth() === 0 && anniv.getDate() === 1) {
+      return policy.baseAnnualDays + calcTenureExtra(year - hireYear, policy);
+    }
     // 1) 1주년 도달 월 직전까지 매월 만근 월차
     //    (1월 1일 → 만근 월 m=1부터 anniv.getMonth()까지)
     const annivMonth = anniv.getMonth(); // 0~11 (1주년 달)
     for (let m = 1; m <= annivMonth; m++) {
       const eventDate = new Date(year, m, 1);
       if (eventDate > ref) break;
-      if (eventDate >= anniv) break; // 1주년 도달 이후 월차는 발생 안 함
+      if (eventDate > anniv) break; // 1주년 도달일 자체의 월차는 부여 (당일 발생분 인정)
       granted += policy.monthlyAccrual;
     }
     // 2) 1주년 도달일에 비례연차 부여
