@@ -252,6 +252,7 @@
   .cal-evt.att-etc    { background: var(--gray-400); color: white; }
   /* 회사 행사 (워크샵/회식) — 모두에게 표시, 이모지로 구분 (중립 배경) */
   .cal-evt.event      { background: var(--gray-100); color: var(--gray-800); font-weight: 700; }
+  .cal-evt.birthday   { background: #fde2e4; color: #8a3343; font-weight: 600; }
   /* '더보기' (하루 5명 이상일 때) */
   .cal-more {
     display: block; font-size: 11.5px; font-weight: 700;
@@ -379,6 +380,40 @@
     <div style="margin-top:16px; text-align:center; font-size:12px; color:var(--gray-600);">
       처음 가입하시나요?
       <a href="#" id="goSignup" style="color:var(--green-600); font-weight:600;">회원가입</a>
+      <span style="margin:0 6px;">·</span>
+      <a href="#" id="goForgotPw" style="color:var(--navy-700); font-weight:600;">비밀번호 찾기</a>
+    </div>
+  </div>
+</div>
+
+<!-- 비밀번호 찾기 -->
+<div id="forgotPwScreen" class="login-wrap" style="display:none;">
+  <div class="login-card">
+    <h1>비밀번호 찾기</h1>
+    <p class="sub">본인 확인을 위해 아이디·이름·입사일을 입력해 주세요. 모두 일치하면 새 비밀번호를 설정할 수 있습니다.</p>
+    <form id="forgotVerifyForm">
+      <label>아이디</label>
+      <input id="fpUsername" type="text" required autocomplete="username" />
+      <label>이름</label>
+      <input id="fpName" type="text" required autocomplete="name" />
+      <label>입사일</label>
+      <input id="fpHire" type="date" required />
+      <button type="submit" class="btn-primary" id="fpVerifyBtn">본인 확인</button>
+      <div class="err" id="fpErr"></div>
+    </form>
+    <form id="forgotResetForm" style="display:none;">
+      <div class="ok-banner" style="margin-bottom:14px;">
+        <strong id="fpMatched"></strong>님 본인 확인 완료. 새 비밀번호를 설정해 주세요.
+      </div>
+      <label>새 비밀번호</label>
+      <input id="fpPw" type="password" required placeholder="최소 4자" />
+      <label>새 비밀번호 확인</label>
+      <input id="fpPw2" type="password" required />
+      <button type="submit" class="btn-primary" id="fpResetBtn">비밀번호 변경</button>
+      <div class="err" id="fpResetErr"></div>
+    </form>
+    <div style="margin-top:16px; text-align:center; font-size:12px; color:var(--gray-600);">
+      <a href="#" id="goLoginFromFp" style="color:var(--navy-700); font-weight:600;">← 로그인으로 돌아가기</a>
     </div>
   </div>
 </div>
@@ -417,8 +452,16 @@
           <input id="suEmail" type="email" required placeholder="예: name@whrcompany.com" />
         </div>
       </div>
-      <label>휴대전화 *</label>
-      <input id="suPhone" type="tel" inputmode="numeric" required maxlength="13" placeholder="010-0000-0000" autocomplete="tel" />
+      <div class="row-2">
+        <div>
+          <label>휴대전화 *</label>
+          <input id="suPhone" type="tel" inputmode="numeric" required maxlength="13" placeholder="010-0000-0000" autocomplete="tel" />
+        </div>
+        <div>
+          <label>생일</label>
+          <input id="suBirth" type="date" />
+        </div>
+      </div>
       <div class="row-2">
         <div>
           <label>비밀번호 *</label>
@@ -489,10 +532,9 @@ const TELEGRAM_BOT_TOKEN = "8943983356:AAHH5fJdbSX0ZD2Fk5d7I9fms_oYoDm6pcA";
 const TELEGRAM_FALLBACK_CHAT_IDS = ["8808458319"]; // Solie Park (DB 비어 있을 때만)
 
 function collectTelegramChatIds() {
-  // 직원 마스터에서 telegram_chat_id가 있는 사람 모두 수집 (중복 제거)
-  const ids = (Store.getEmployees() || [])
-    .map((e) => (e.telegramChatId || "").trim())
-    .filter(Boolean);
+  // 재직 중 직원 중 telegram_chat_id가 있는 사람만 수집 (퇴사자 제외)
+  const src = Store.getActiveEmployees ? Store.getActiveEmployees() : (Store.getEmployees() || []).filter(e => !e.terminationDate);
+  const ids = src.map((e) => (e.telegramChatId || "").trim()).filter(Boolean);
   const unique = Array.from(new Set(ids));
   return unique.length > 0 ? unique : TELEGRAM_FALLBACK_CHAT_IDS;
 }
@@ -580,12 +622,16 @@ const dbToEmp = (r) => r && ({
   passwordHash: r.password_hash, role: r.role,
   leaveAdjustment: Number(r.leave_adjustment || 0),
   telegramChatId: r.telegram_chat_id || null,
+  birthDate: r.birth_date || null,
+  terminationDate: r.termination_date || null,
 });
 const empToDb = (e) => ({
   username: e.empNo, name: e.name, email: e.email, phone: e.phone,
   hire_date: e.hireDate, position: e.position, department: e.department,
   password_hash: e.passwordHash, role: e.role,
   telegram_chat_id: e.telegramChatId || null,
+  birth_date: e.birthDate || null,
+  termination_date: e.terminationDate || null,
 });
 
 // 근태기록 ↔ JS
@@ -680,6 +726,8 @@ const Store = {
   },
 
   getEmployees() { return this._cache.employees; },
+  getActiveEmployees() { return this._cache.employees.filter(e => !e.terminationDate); },
+  getTerminatedEmployees() { return this._cache.employees.filter(e => e.terminationDate); },
   getEmployee(empNo) { return this._cache.employees.find((e) => e.empNo === empNo); },
   getRequests() { return this._cache.requests; },
   getRequestsByEmp(empNo) { return this._cache.requests.filter((r) => r.empNo === empNo); },
@@ -711,6 +759,8 @@ const Store = {
     if ("role" in patch) row.role = patch.role;
     if ("leaveAdjustment" in patch) row.leave_adjustment = patch.leaveAdjustment;
     if ("telegramChatId" in patch) row.telegram_chat_id = patch.telegramChatId || null;
+    if ("birthDate" in patch) row.birth_date = patch.birthDate || null;
+    if ("terminationDate" in patch) row.termination_date = patch.terminationDate || null;
     if ("empNo" in patch) row.username = patch.empNo; // 아이디 변경
     if (Object.keys(row).length === 0) return;
     const { error } = await sb.from("employees").update(row).eq("username", currentUsername);
@@ -1036,6 +1086,7 @@ async function login(username, pw) {
   await Store.refresh();
   const emp = Store.getEmployee(username);
   if (!emp) return { ok: false, msg: "아이디를 찾을 수 없습니다." };
+  if (emp.terminationDate) return { ok: false, msg: "퇴사 처리된 계정입니다. 관리자에게 문의하세요." };
   const h = await hashPassword(pw);
   if (h !== emp.passwordHash) return { ok: false, msg: "비밀번호가 올바르지 않습니다." };
   Store.setSession(username);
@@ -1052,18 +1103,30 @@ function hideAllScreens() {
   $("#setupScreen").style.display = "none";
   $("#loginScreen").style.display = "none";
   $("#signupScreen").style.display = "none";
+  const fp = $("#forgotPwScreen"); if (fp) fp.style.display = "none";
   $("#app").classList.remove("active");
 }
 function showBoot()  { hideAllScreens(); $("#bootScreen").style.display  = "flex"; }
 function showSetup(){ hideAllScreens(); $("#setupScreen").style.display = "flex"; }
 function showLogin(){ hideAllScreens(); $("#loginScreen").style.display = "flex"; $("#loginUsername").value=""; $("#loginPw").value=""; $("#loginErr").textContent=""; }
+function showForgotPw(){
+  hideAllScreens();
+  $("#forgotPwScreen").style.display = "flex";
+  $("#forgotVerifyForm").style.display = "";
+  $("#forgotResetForm").style.display = "none";
+  ["fpUsername","fpName","fpHire","fpPw","fpPw2"].forEach(id => { const el = $("#" + id); if (el) el.value = ""; });
+  $("#fpErr").textContent = "";
+  $("#fpResetErr").textContent = "";
+  _fpMatchedEmp = null;
+}
+let _fpMatchedEmp = null;
 function showSignup(){
   hideAllScreens();
   $("#signupScreen").style.display = "flex";
   // 폼 초기화 — 1단계로 리셋
   $("#signupMatchForm").style.display = "";
   $("#signupInfoForm").style.display = "none";
-  ["suName","suHire","suUsername","suEmail","suPhone","suPw","suPw2"].forEach(id => { const el = $("#" + id); if (el) el.value = ""; });
+  ["suName","suHire","suUsername","suEmail","suPhone","suBirth","suPw","suPw2"].forEach(id => { const el = $("#" + id); if (el) el.value = ""; });
   $("#suMatchErr").textContent = "";
   $("#suInfoErr").textContent = "";
 }
@@ -1113,8 +1176,8 @@ pages.home = function () {
     const approvedThisYear = Store.getRequests().filter(
       (r) => r.status === "approved" && parseLocalDate(r.startDate).getFullYear() === today().getFullYear()
     ).length;
-    // 당겨쓰기로 음수 잔여인 직원 명단
-    const negativeBalEmps = Store.getEmployees()
+    // 당겨쓰기로 음수 잔여인 직원 명단 (퇴사자 제외)
+    const negativeBalEmps = (Store.getActiveEmployees ? Store.getActiveEmployees() : Store.getEmployees())
       .map((e) => ({ emp: e, bal: calcBalance(e) }))
       .filter((x) => x.bal.remaining < 0)
       .sort((a, b) => a.bal.remaining - b.bal.remaining); // 마이너스 큰 순
@@ -1142,7 +1205,7 @@ pages.home = function () {
       <div class="card">
         <h3>관리자 요약</h3>
         <div class="grid-3">
-          <div class="stat-card"><div class="label">전체 직원 수</div><div class="value">${Store.getEmployees().length}<span class="unit">명</span></div></div>
+          <div class="stat-card"><div class="label">재직 직원 수</div><div class="value">${(Store.getActiveEmployees ? Store.getActiveEmployees() : Store.getEmployees()).length}<span class="unit">명</span></div></div>
           <div class="stat-card yellow"><div class="label">승인 대기 중인 신청</div><div class="value">${allPending}<span class="unit">건</span></div></div>
           <div class="stat-card green"><div class="label">올해 승인된 신청</div><div class="value">${approvedThisYear}<span class="unit">건</span></div></div>
         </div>
@@ -1276,6 +1339,18 @@ function renderMonthCalendar() {
     eventsByDate[k].push({ kind: "event", data: ev });
   });
 
+  // 생일 — 재직 중인 직원 한정, 표시 중인 달(month)의 생일자만 추가
+  (Store.getActiveEmployees ? Store.getActiveEmployees() : Store.getEmployees().filter(e => !e.terminationDate))
+    .filter(e => e.birthDate)
+    .forEach(e => {
+      const bd = parseLocalDate(e.birthDate);
+      if (!bd) return;
+      if (bd.getMonth() !== month) return; // 이 달 생일자만
+      const dayK = `${year}-${String(month+1).padStart(2,"0")}-${String(bd.getDate()).padStart(2,"0")}`;
+      if (!eventsByDate[dayK]) eventsByDate[dayK] = [];
+      eventsByDate[dayK].push({ kind: "birthday", data: e });
+    });
+
   $("#calTitle").textContent = `${year}년 ${month + 1}월`;
 
   // 그 달이 차지하는 주 수 계산 (4·5·6주)
@@ -1310,11 +1385,12 @@ function renderMonthCalendar() {
     const holidayHtml = holidayName
       ? `<span class="cal-holiday-name" title="${escapeHtml(holidayName)}">${escapeHtml(holidayName)}</span>`
       : "";
-    // 행사 먼저, 연차 다음, 근태 마지막. 같은 종류 내에선 이름순(행사는 종류순)
-    const kindOrder = { event: 0, leave: 1, attendance: 2 };
+    // 행사 → 생일 → 연차 → 근태. 같은 종류 내에선 이름순(행사는 종류순)
+    const kindOrder = { event: 0, birthday: 1, leave: 2, attendance: 3 };
     const evts = (eventsByDate[k] || []).slice().sort((x, y) => {
       if (x.kind !== y.kind) return kindOrder[x.kind] - kindOrder[y.kind];
       if (x.kind === "event") return (x.data.eventType || "").localeCompare(y.data.eventType || "");
+      if (x.kind === "birthday") return (x.data.name || "").localeCompare(y.data.name || "");
       return x.data.empNo.localeCompare(y.data.empNo);
     });
 
@@ -1326,6 +1402,10 @@ function renderMonthCalendar() {
         const emoji = eventTypeEmoji(ev.eventType);
         const text = `${eventTypeLabel(ev.eventType)}${ev.title ? " " + ev.title : ""}`;
         evtHtml += `<span class="cal-evt event" title="${escapeHtml(text)}">${emoji} ${escapeHtml(text)}</span>`;
+      } else if (item.kind === "birthday") {
+        const e = item.data;
+        const label = `🎂 ${e.name} 생일`;
+        evtHtml += `<span class="cal-evt birthday" title="${escapeHtml(label)}">${escapeHtml(label)}</span>`;
       } else if (item.kind === "leave") {
         const r = item.data;
         const emp = Store.getEmployee(r.empNo);
@@ -1648,25 +1728,29 @@ pages.profile = function () {
 };
 
 /* ------------------ 12. 페이지: 직원 관리 (관리자) ------------------ */
+let _empListMode = "active"; // "active" | "terminated"
 pages.employees = function () {
   const u = currentUser();
   if (u.role !== "admin") return navigate("home");
-  // 입사일 오름차순 (오래된 입사자가 위)
-  const list = Store.getEmployees().slice().sort((a, b) => {
-    const ah = a.hireDate || "";
-    const bh = b.hireDate || "";
-    return ah.localeCompare(bh);
-  });
+  // 입사일 오름차순
+  const all = Store.getEmployees().slice().sort((a, b) => (a.hireDate || "").localeCompare(b.hireDate || ""));
+  const activeList = all.filter(e => !e.terminationDate);
+  const termList   = all.filter(e =>  e.terminationDate);
+  const list = _empListMode === "terminated" ? termList : activeList;
 
   const blank = `<span style="color:var(--gray-400);">-</span>`;
+  const isTerm = _empListMode === "terminated";
 
   $("#mainContent").innerHTML = `
     <h2 class="page-title">직원 관리</h2>
-    <p class="page-sub">이름을 클릭하면 상세 정보 · 근태기록 · 면담일지를 볼 수 있습니다. (입사일 오래된 순으로 정렬)</p>
+    <p class="page-sub">이름을 클릭하면 상세 정보 · 근태기록 · 면담일지를 볼 수 있습니다.</p>
     <div class="card">
-      <div class="toolbar">
-        <h3 style="margin:0;">직원 목록 (${list.length}명)</h3>
-        <button class="btn green sm" id="openAddEmp">+ 신규 직원 추가</button>
+      <div class="toolbar" style="gap:8px;">
+        <div style="display:flex; gap:6px;">
+          <button class="btn ${isTerm ? "ghost" : "navy"} sm" id="tabActive">재직자 (${activeList.length})</button>
+          <button class="btn ${isTerm ? "navy" : "ghost"} sm" id="tabTerm">퇴사자 (${termList.length})</button>
+        </div>
+        ${isTerm ? "" : `<button class="btn green sm" id="openAddEmp">+ 신규 직원 추가</button>`}
       </div>
       <table class="emp-table">
         <thead>
@@ -1676,6 +1760,7 @@ pages.employees = function () {
             <th>권한</th>
             <th>이메일</th>
             <th>전화번호</th>
+            ${isTerm ? `<th>퇴사일</th>` : ``}
           </tr>
         </thead>
         <tbody>
@@ -1689,13 +1774,18 @@ pages.employees = function () {
               </td>
               <td>${e.email ? escapeHtml(e.email) : blank}</td>
               <td>${e.phone ? escapeHtml(e.phone) : blank}</td>
+              ${isTerm ? `<td>${escapeHtml(e.terminationDate || "-")}</td>` : ``}
             </tr>`;
           }).join("")}
+          ${list.length === 0 ? `<tr><td colspan="${isTerm ? 6 : 5}" style="text-align:center; color:var(--gray-500); padding:24px;">${isTerm ? "퇴사자가 없습니다." : "재직자가 없습니다."}</td></tr>` : ""}
         </tbody>
       </table>
     </div>
   `;
-  $("#openAddEmp").addEventListener("click", openAddEmployeeModal);
+  const addBtn = $("#openAddEmp");
+  if (addBtn) addBtn.addEventListener("click", openAddEmployeeModal);
+  $("#tabActive").addEventListener("click", () => { _empListMode = "active"; pages.employees(); });
+  $("#tabTerm").addEventListener("click", () => { _empListMode = "terminated"; pages.employees(); });
 
   // 행 클릭 → 직원 상세 모달
   $$("tr.emp-row").forEach((tr) => {
@@ -1826,6 +1916,9 @@ function openAddEmployeeModal() {
       </div>
       <div class="form-row">
         <div class="form-group"><label>입사일 *</label><input id="newHire" type="date" required /></div>
+        <div class="form-group"><label>생일</label><input id="newBirth" type="date" /></div>
+      </div>
+      <div class="form-row">
         <div class="form-group">
           <label>권한 *</label>
           <select id="newRole">
@@ -1833,14 +1926,15 @@ function openAddEmployeeModal() {
             <option value="admin">관리자</option>
           </select>
         </div>
+        <div class="form-group"><label>초기 비밀번호 *</label><input id="newPw" type="text" required placeholder="최소 4자" /></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>초기 비밀번호 *</label><input id="newPw" type="text" required placeholder="최소 4자" /></div>
         <div class="form-group">
           <label>텔레그램 Chat ID</label>
           <input id="newTg" placeholder="예: 8808458319 (비워두면 알림 안 받음)" autocomplete="off" />
           <div class="hint">신청 알림을 받을 사람만 입력. 봇에 /start 후 getUpdates의 chat.id 값.</div>
         </div>
+        <div class="form-group"></div>
       </div>
       <div class="actions">
         <button type="button" class="btn ghost" id="closeModal">취소</button>
@@ -1876,6 +1970,7 @@ function openAddEmployeeModal() {
         role: $("#newRole").value,
         passwordHash: await hashPassword(pw),
         telegramChatId: ($("#newTg") && $("#newTg").value.trim()) || null,
+        birthDate: ($("#newBirth") && $("#newBirth").value) || null,
       });
       closeModal();
       navigate("employees");
@@ -1917,10 +2012,18 @@ function openEditEmployeeModal(empNo) {
       </div>
       <div class="form-row">
         <div class="form-group"><label>직급</label><input id="edPosition" type="text" value="${escapeHtml(emp.position || '')}" placeholder="예: 매니저, 사원, 팀장" autocomplete="off" /></div>
+        <div class="form-group"><label>생일</label><input id="edBirth" type="date" value="${escapeHtml(emp.birthDate || '')}" /></div>
+      </div>
+      <div class="form-row">
         <div class="form-group">
           <label>텔레그램 Chat ID</label>
           <input id="edTg" value="${escapeHtml(emp.telegramChatId || '')}" placeholder="예: 8808458319" autocomplete="off" />
           <div class="hint">값이 있으면 연차 신청 발생 시 이 직원에게 알림 전송.</div>
+        </div>
+        <div class="form-group">
+          <label>퇴사일</label>
+          <input id="edTerm" type="date" value="${escapeHtml(emp.terminationDate || '')}" />
+          <div class="hint">값을 넣으면 퇴사자로 처리되어 재직자 목록에서 빠집니다.</div>
         </div>
       </div>
       <div class="actions">
@@ -1954,6 +2057,8 @@ function openEditEmployeeModal(empNo) {
         role: $("#edRole").value,
         position: $("#edPosition").value.trim() || null,
         telegramChatId: ($("#edTg") && $("#edTg").value.trim()) || null,
+        birthDate: ($("#edBirth") && $("#edBirth").value) || null,
+        terminationDate: ($("#edTerm") && $("#edTerm").value) || null,
       };
       if (newU !== emp.empNo) patch.empNo = newU;
 
@@ -3256,6 +3361,62 @@ $("#logoutBtn").addEventListener("click", () => {
 $("#goSignup").addEventListener("click", (e) => { e.preventDefault(); showSignup(); });
 $("#backToLogin").addEventListener("click", (e) => { e.preventDefault(); showLogin(); });
 
+/* --- 비밀번호 찾기 흐름 --- */
+$("#goForgotPw").addEventListener("click", (e) => { e.preventDefault(); showForgotPw(); });
+$("#goLoginFromFp").addEventListener("click", (e) => { e.preventDefault(); showLogin(); });
+
+// 1단계: 아이디 + 이름 + 입사일로 본인 확인
+$("#forgotVerifyForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errEl = $("#fpErr");
+  errEl.textContent = "";
+  const btn = $("#fpVerifyBtn");
+  btn.disabled = true;
+  try {
+    await Store.refresh();
+    const u = $("#fpUsername").value.trim();
+    const name = $("#fpName").value.trim();
+    const hire = $("#fpHire").value;
+    if (!u || !name || !hire) throw new Error("모든 항목을 입력해 주세요.");
+    const emp = Store.getEmployee(u);
+    if (!emp) throw new Error("일치하는 직원 정보를 찾지 못했습니다.");
+    if (emp.name !== name) throw new Error("이름이 일치하지 않습니다.");
+    if (emp.hireDate !== hire) throw new Error("입사일이 일치하지 않습니다.");
+    if (emp.terminationDate) throw new Error("퇴사 처리된 계정입니다. 관리자에게 문의하세요.");
+    _fpMatchedEmp = emp;
+    $("#fpMatched").textContent = emp.name;
+    $("#forgotVerifyForm").style.display = "none";
+    $("#forgotResetForm").style.display = "";
+  } catch (err) {
+    errEl.textContent = err.message || String(err);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// 2단계: 새 비밀번호 설정
+$("#forgotResetForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errEl = $("#fpResetErr");
+  errEl.textContent = "";
+  const btn = $("#fpResetBtn");
+  btn.disabled = true;
+  try {
+    if (!_fpMatchedEmp) throw new Error("본인 확인이 만료됐어요. 다시 시도해 주세요.");
+    const pw = $("#fpPw").value;
+    const pw2 = $("#fpPw2").value;
+    if (pw.length < 4) throw new Error("새 비밀번호는 최소 4자 이상이어야 합니다.");
+    if (pw !== pw2) throw new Error("새 비밀번호 확인이 일치하지 않습니다.");
+    await Store.updateEmployeePassword(_fpMatchedEmp.empNo, await hashPassword(pw));
+    alert("비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.");
+    showLogin();
+  } catch (err) {
+    errEl.textContent = err.message || String(err);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // 1단계: 이름 + 입사일로 임시 계정 매칭
 $("#signupMatchForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -3321,11 +3482,13 @@ $("#signupInfoForm").addEventListener("submit", async (e) => {
       throw new Error("이미 사용 중인 아이디입니다.");
     }
 
-    // 1) 임시 username을 새 username으로 변경 + 이메일·전화번호 업데이트
+    // 1) 임시 username을 새 username으로 변경 + 이메일·전화번호·생일 업데이트
+    const birthDate = ($("#suBirth") && $("#suBirth").value) || null;
     await Store.updateEmployee(_signupMatchedEmp.empNo, {
       empNo: newU,
       email,
       phone,
+      birthDate,
     });
     // 2) 비밀번호 진짜 hash로 덮어쓰기
     await Store.updateEmployeePassword(newU, await hashPassword(pw));
