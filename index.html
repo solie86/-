@@ -904,13 +904,20 @@ const Store = {
    상세 정책값은 policy 테이블에서 조정 가능
    ----------------------------------------------------------------- */
 
-// 입사월 기반 비례연차 = base × (입사월부터 12월까지 개월수) / 12
-//   = "입사월 포함 그 해 남은 개월수"에 비례 (표준 노동법 해석)
-//   예) 5월 입사 → 8/12 × 15 = 10
-//       7월 입사 → 6/12 × 15 = 7.5
+// 입사월 기반 비례연차
+//   - 입사일이 매월 1일이면 → 입사월(hireMonth) 그대로 적용
+//   - 그 외 (월 중간 입사) → 다음 달 1일 입사로 간주 (effectiveMonth = hireMonth + 1)
+//   - effectiveMonth > 12 (= 12월 중간 입사) → 그 해 안에 시작 자리 없음 → 비례 0
+//   공식: base × (12 - effectiveMonth + 1) / 12
+//   예) 5/1  입사 → effM=5 → 15 × 8/12 = 10
+//       5/19 입사 → effM=6 → 15 × 7/12 = 8.75 → 9
+//       3/24 입사 → effM=4 → 15 × 9/12 = 11.25 → 11.5
+//       12/23 입사 → effM=13 → 0
 function calcProportionalDays(hireDate, baseDays) {
-  const hireMonth = hireDate.getMonth() + 1; // 1~12
-  const monthsInFirstYear = 12 - hireMonth + 1; // 입사월 포함 12월까지
+  let effectiveMonth = hireDate.getMonth() + 1; // 1~12
+  if (hireDate.getDate() !== 1) effectiveMonth += 1;
+  if (effectiveMonth > 12) return 0;
+  const monthsInFirstYear = 12 - effectiveMonth + 1;
   const days = baseDays * monthsInFirstYear / 12;
   // 0.5 단위로 반올림
   return Math.round(days * 2) / 2;
@@ -946,16 +953,12 @@ function calcGrantedForYear(emp, year, asOf = today()) {
 
   if (year < annivYear) {
     // ---- (A) 입사한 해 (=만 1년 미만, 월차만) ----
-    // 첫 월차 발생 월:
-    //   - 입사일이 매월 1일이면 → 입사 다음 달 1일 (입사월 만근으로 인정)
-    //   - 그 외 (월 중간 입사) → 그 다음 달 1일 (입사월 만근으로 인정 안 함)
-    //   예) 7/1 입사 → 8/1 첫 월차 (7월 만근)
-    //       5/19 입사 → 7/1 첫 월차 (6월이 첫 만근 가능 월)
-    const firstAccrualMonth = hireDate.getDate() === 1
-      ? hireDate.getMonth() + 1
-      : hireDate.getMonth() + 2;
-    for (let m = firstAccrualMonth; m < 12; m++) {
-      const eventDate = new Date(year, m, 1);
+    // 매월 입사일자(hireDay)에 월차 발생, 입사 다음 달부터
+    //   예) 1/7 입사 → 2/7, 3/7, ... 매월 7일
+    //       3/24 입사 → 4/24, 5/24, ... 매월 24일
+    const hireDay = hireDate.getDate();
+    for (let m = hireDate.getMonth() + 1; m < 12; m++) {
+      const eventDate = new Date(year, m, hireDay);
       if (eventDate > ref) break;
       granted += policy.monthlyAccrual;
     }
@@ -964,20 +967,21 @@ function calcGrantedForYear(emp, year, asOf = today()) {
 
   if (year === annivYear) {
     // ---- (B) 만 1주년 도달 해 ----
-    // 예외: 1월 1일 입사자는 anniv가 회계연도 시작과 일치 → 정상 부여 (case C와 동일)
+    // 예외: 1/1 입사자는 anniv가 회계연도 시작과 일치 → 정상 부여 (case C와 동일)
     if (anniv.getMonth() === 0 && anniv.getDate() === 1) {
       return policy.baseAnnualDays + calcTenureExtra(year - hireYear, policy);
     }
-    // 1) 1주년 도달 월 직전까지 매월 만근 월차
-    //    (1월 1일 → 만근 월 m=1부터 anniv.getMonth()까지)
-    const annivMonth = anniv.getMonth(); // 0~11 (1주년 달)
-    for (let m = 1; m <= annivMonth; m++) {
-      const eventDate = new Date(year, m, 1);
+    // 매월 입사일자(hireDay)에 월차 발생, 1월부터 만 1주년 도달일 직전까지
+    //   - 1주년 도달일 자체는 부여 X (= 월차 최대 11개)
+    //   - 1주년 도달일에는 비례연차만 지급
+    const hireDay = hireDate.getDate();
+    for (let m = 0; m < 12; m++) {
+      const eventDate = new Date(year, m, hireDay);
       if (eventDate > ref) break;
-      if (eventDate > anniv) break; // 1주년 도달일 자체의 월차는 부여 (당일 발생분 인정)
+      if (eventDate >= anniv) break; // 1주년 당일 부여 X
       granted += policy.monthlyAccrual;
     }
-    // 2) 1주년 도달일에 비례연차 부여
+    // 1주년 도달일에 비례연차 부여
     if (policy.fiscalProportionalEnabled && anniv <= ref) {
       granted += calcProportionalDays(hireDate, policy.baseAnnualDays);
     }
@@ -2559,12 +2563,17 @@ function renderEmployeeInfoTab(empNo) {
     ${isAdmin ? `
       <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
         <button class="btn ghost sm" id="infoEdit">정보 수정</button>
+        <button class="btn ghost sm" id="infoResetPw">비밀번호 재설정</button>
         <button class="btn ghost sm" id="infoDelete" style="color:var(--red-500);">직원 삭제</button>
-      </div>` : ""}
+      </div>
+      <p style="font-size:11px; color:var(--gray-500); margin-top:8px;">
+        ※ 비밀번호는 SHA-256 해시로 저장되어 평문 확인이 불가합니다. 직원이 비번을 잊었을 때 [재설정]에서 새 값으로 덮어쓰세요.
+      </p>` : ""}
   `;
 
   if (isAdmin) {
     $("#infoEdit").addEventListener("click", () => { closeModal(); openEditEmployeeModal(empNo); });
+    $("#infoResetPw").addEventListener("click", () => { closeModal(); openResetPwModal(empNo); });
     $("#infoDelete").addEventListener("click", () => { closeModal(); openDeleteEmployeeModal(empNo); });
   }
 }
