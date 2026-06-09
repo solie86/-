@@ -1793,54 +1793,120 @@ pages.employees = function () {
   });
 };
 
+// 퇴사 처리 (soft delete) — 직원 데이터는 보존하고 termination_date만 설정
 function openDeleteEmployeeModal(empNo) {
   const emp = Store.getEmployee(empNo);
   if (!emp) return alert("직원 정보를 찾을 수 없습니다.");
   const cur = currentUser();
   if (cur.empNo === emp.empNo) {
-    return alert("본인 계정은 삭제할 수 없습니다. 다른 관리자에게 요청하세요.");
+    return alert("본인 계정은 퇴사 처리할 수 없습니다. 다른 관리자에게 요청하세요.");
   }
-  const adminCount = Store.getEmployees().filter(e => e.role === "admin").length;
-  if (emp.role === "admin" && adminCount <= 1) {
-    return alert("관리자가 한 명뿐입니다. 마지막 관리자는 삭제할 수 없습니다.");
+  const activeAdmins = (Store.getActiveEmployees ? Store.getActiveEmployees() : Store.getEmployees().filter(e => !e.terminationDate)).filter(e => e.role === "admin");
+  if (emp.role === "admin" && activeAdmins.length <= 1) {
+    return alert("재직 관리자가 한 명뿐입니다. 마지막 관리자는 퇴사 처리할 수 없습니다.");
   }
 
   const reqCount = Store.getRequests().filter(r => r.empNo === empNo).length;
+  const todayStr = fmtDate(today());
 
   $("#modalBody").innerHTML = `
-    <h3 style="color:var(--red-500);">⚠ 직원 삭제 — ${escapeHtml(emp.name)}</h3>
+    <h3>퇴사 처리 — ${escapeHtml(emp.name)}</h3>
     <p style="font-size:13px; color:var(--gray-600); line-height:1.6; margin: 0 0 12px;">
-      <strong>${escapeHtml(emp.name)}</strong> 직원의 계정과 함께
-      이 직원의 연차 신청 내역 <strong>${reqCount}건</strong>이 모두 영구 삭제됩니다.
-      이 작업은 되돌릴 수 없습니다.
+      <strong>${escapeHtml(emp.name)}</strong> 직원을 퇴사자로 처리합니다.
+      연차 신청 내역 <strong>${reqCount}건</strong>은 그대로 보존되며,
+      재직자 목록·텔레그램 알림·캘린더에서 자동 제외됩니다.
+      [재직자 / 퇴사자] 탭으로 언제든 다시 조회할 수 있어요.
     </p>
-    <p style="font-size:13px; color:var(--gray-600); margin: 0 0 6px;">
-      확인을 위해 아래에 직원 이름을 그대로 입력해 주세요.
-    </p>
-    <form id="delForm">
+    <form id="termForm">
       <div class="form-group">
-        <input id="delConfirm" placeholder="${escapeHtml(emp.name)}" autocomplete="off" />
+        <label>퇴사일 *</label>
+        <input id="termDate" type="date" required value="${todayStr}" />
+        <div class="hint">기본값은 오늘 날짜. 필요하면 실제 퇴사일로 수정.</div>
       </div>
       <div class="actions">
         <button type="button" class="btn ghost" id="closeModal">취소</button>
-        <button type="submit" class="btn danger" id="saveDel">영구 삭제</button>
+        <button type="submit" class="btn danger" id="saveTerm">퇴사 처리</button>
       </div>
     </form>
   `;
   $("#modalBackdrop").classList.add("active");
   $("#closeModal").addEventListener("click", closeModal);
 
-  $("#delForm").addEventListener("submit", async (e) => {
+  $("#termForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const btn = $("#saveDel");
+    const btn = $("#saveTerm");
     btn.disabled = true;
     try {
-      if ($("#delConfirm").value.trim() !== emp.name) {
+      const termDate = $("#termDate").value;
+      if (!termDate) throw new Error("퇴사일을 입력해 주세요.");
+      await Store.updateEmployee(emp.empNo, { terminationDate: termDate });
+      closeModal();
+      alert(`${emp.name} 직원이 퇴사 처리되었습니다.`);
+      _empListMode = "terminated";
+      navigate("employees");
+    } catch (err) {
+      alert("퇴사 처리 실패: " + (err.message || err));
+      btn.disabled = false;
+    }
+  });
+}
+
+// 재직 복귀 — 퇴사자의 termination_date를 비워서 다시 재직자로
+async function reinstateEmployee(empNo) {
+  const emp = Store.getEmployee(empNo);
+  if (!emp) return alert("직원 정보를 찾을 수 없습니다.");
+  if (!confirm(`${emp.name} 직원을 재직자로 복귀시킬까요?`)) return;
+  try {
+    await Store.updateEmployee(emp.empNo, { terminationDate: null });
+    alert(`${emp.name} 직원이 재직 복귀되었습니다.`);
+    _empListMode = "active";
+    closeModal();
+    navigate("employees");
+  } catch (err) {
+    alert("복귀 처리 실패: " + (err.message || err));
+  }
+}
+
+// 영구 삭제 (퇴사자만 가능) — 연차 신청 내역까지 모두 삭제
+function openHardDeleteEmployeeModal(empNo) {
+  const emp = Store.getEmployee(empNo);
+  if (!emp) return alert("직원 정보를 찾을 수 없습니다.");
+  if (!emp.terminationDate) return alert("퇴사 처리된 직원만 영구 삭제할 수 있습니다.");
+  const reqCount = Store.getRequests().filter(r => r.empNo === empNo).length;
+
+  $("#modalBody").innerHTML = `
+    <h3 style="color:var(--red-500);">⚠ 영구 삭제 — ${escapeHtml(emp.name)}</h3>
+    <p style="font-size:13px; color:var(--gray-600); line-height:1.6; margin: 0 0 12px;">
+      <strong>${escapeHtml(emp.name)}</strong> 직원의 모든 데이터와
+      연차 신청 내역 <strong>${reqCount}건</strong>이 데이터베이스에서 영구히 삭제됩니다.
+      이 작업은 <strong>되돌릴 수 없습니다.</strong>
+    </p>
+    <p style="font-size:13px; color:var(--gray-600); margin: 0 0 6px;">
+      확인을 위해 아래에 직원 이름을 그대로 입력해 주세요.
+    </p>
+    <form id="hardDelForm">
+      <div class="form-group">
+        <input id="hardDelConfirm" placeholder="${escapeHtml(emp.name)}" autocomplete="off" />
+      </div>
+      <div class="actions">
+        <button type="button" class="btn ghost" id="closeModal">취소</button>
+        <button type="submit" class="btn danger" id="hardDelBtn">영구 삭제</button>
+      </div>
+    </form>
+  `;
+  $("#modalBackdrop").classList.add("active");
+  $("#closeModal").addEventListener("click", closeModal);
+  $("#hardDelForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const btn = $("#hardDelBtn");
+    btn.disabled = true;
+    try {
+      if ($("#hardDelConfirm").value.trim() !== emp.name) {
         throw new Error("입력한 이름이 직원 이름과 일치하지 않습니다.");
       }
       await Store.deleteEmployee(emp.empNo);
       closeModal();
-      alert(`${emp.name} 직원이 삭제되었습니다.`);
+      alert(`${emp.name} 직원이 영구 삭제되었습니다.`);
       navigate("employees");
     } catch (err) {
       alert("삭제 실패: " + (err.message || err));
@@ -2669,17 +2735,29 @@ function renderEmployeeInfoTab(empNo) {
       <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
         <button class="btn ghost sm" id="infoEdit">정보 수정</button>
         <button class="btn ghost sm" id="infoResetPw">비밀번호 재설정</button>
-        <button class="btn ghost sm" id="infoDelete" style="color:var(--red-500);">직원 삭제</button>
+        ${emp.terminationDate
+          ? `<button class="btn ghost sm" id="infoReinstate" style="color:var(--green-600);">재직 복귀</button>
+             <button class="btn ghost sm" id="infoHardDelete" style="color:var(--red-500);">영구 삭제</button>`
+          : `<button class="btn ghost sm" id="infoDelete" style="color:var(--red-500);">퇴사 처리</button>`}
       </div>
-      <p style="font-size:11px; color:var(--gray-500); margin-top:8px;">
-        ※ 비밀번호는 SHA-256 해시로 저장되어 평문 확인이 불가합니다. 직원이 비번을 잊었을 때 [재설정]에서 새 값으로 덮어쓰세요.
-      </p>` : ""}
+      ${emp.terminationDate
+        ? `<p style="font-size:11px; color:var(--gray-500); margin-top:8px;">
+             ※ 퇴사일 ${escapeHtml(emp.terminationDate)} · 데이터는 보존 중. [재직 복귀]로 되돌릴 수 있고, [영구 삭제]는 신청 내역까지 함께 삭제됩니다.
+           </p>`
+        : `<p style="font-size:11px; color:var(--gray-500); margin-top:8px;">
+             ※ [퇴사 처리]는 직원을 퇴사자로 옮길 뿐 데이터는 보존됩니다. 비밀번호는 SHA-256 해시 저장이라 평문 확인 불가 — 잊었을 때만 [재설정].
+           </p>`}` : ""}
   `;
 
   if (isAdmin) {
     $("#infoEdit").addEventListener("click", () => { closeModal(); openEditEmployeeModal(empNo); });
     $("#infoResetPw").addEventListener("click", () => { closeModal(); openResetPwModal(empNo); });
-    $("#infoDelete").addEventListener("click", () => { closeModal(); openDeleteEmployeeModal(empNo); });
+    const delBtn = $("#infoDelete");
+    if (delBtn) delBtn.addEventListener("click", () => { closeModal(); openDeleteEmployeeModal(empNo); });
+    const reBtn = $("#infoReinstate");
+    if (reBtn) reBtn.addEventListener("click", () => reinstateEmployee(empNo));
+    const hardBtn = $("#infoHardDelete");
+    if (hardBtn) hardBtn.addEventListener("click", () => { closeModal(); openHardDeleteEmployeeModal(empNo); });
   }
 }
 
