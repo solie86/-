@@ -2810,14 +2810,47 @@ function renderAttendanceTab(empNo, selectedYear) {
     .filter(r => parseLocalDate(r.recordDate).getFullYear() === year)
     .sort((a, b) => (a.recordDate < b.recordDate ? 1 : -1));
 
+  // 연차/근태 통계 (그 해 기준)
+  const bal = calcBalance(emp, year);
+  const counts = {
+    late:   records.filter((r) => r.recordType === "late").length,
+    absent: records.filter((r) => r.recordType === "absent").length,
+    sick:   records.filter((r) => r.recordType === "sick").length,
+  };
+
   $("#empDetailContent").innerHTML = `
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-      <div style="font-size:13px; font-weight:600; color:var(--gray-700);">${year === thisYear ? "올해" : year + "년"} 사용 내역</div>
+    <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
       <select id="attYear" class="btn ghost sm" style="padding:4px 10px;">${yearOptionsHtml}</select>
     </div>
+
+    <div class="grid-3" style="margin-bottom:14px;">
+      <div class="stat-card"><div class="label">부여 (${year}년)</div><div class="value">${bal.granted}<span class="unit">일</span></div>
+        <div style="font-size:11px; color:var(--gray-600); margin-top:4px;">입사일 ${emp.hireDate}${bal.adjustment ? ` · 조정 ${bal.adjustment >= 0 ? "+" : ""}${bal.adjustment}` : ""}</div>
+      </div>
+      <div class="stat-card yellow"><div class="label">사용</div><div class="value">${bal.used}<span class="unit">일</span></div>
+        <div style="font-size:11px; color:var(--gray-600); margin-top:4px;">승인 ${approved.length}건</div>
+      </div>
+      <div class="stat-card ${bal.remaining < 0 ? 'red' : 'green'}">
+        <div class="label">잔여${bal.remaining < 0 ? ` <span style="font-size:11px;background:#fee;color:#c00;padding:1px 6px;border-radius:8px;">당겨쓰기</span>` : ``}</div>
+        <div class="value">${bal.remaining}<span class="unit">일</span></div>
+      </div>
+    </div>
+
+    <div style="font-size:13px; font-weight:600; color:var(--gray-700); margin:6px 0;">${year === thisYear ? "올해" : year + "년"} 사용 내역</div>
     ${usedListHtml}
 
     <div style="border-top:1px solid var(--gray-200); margin:14px 0;"></div>
+
+    <div style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:14px; font-size:13px;">
+      <span><strong style="color:#8a6a14; font-size:16px;">${counts.late}</strong> 지각</span>
+      <span><strong style="color:#a73838; font-size:16px;">${counts.absent}</strong> 결근</span>
+      <span><strong style="color:var(--navy-700); font-size:16px;">${counts.sick}</strong> 병가</span>
+    </div>
+
+    ${isAdmin ? `
+      <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
+        <button class="btn ghost sm" id="detailAdjust">잔여 조정</button>
+      </div>` : ""}
 
     ${isAdmin ? `
       <form id="addAttForm" style="background:var(--gray-50); padding:14px; border-radius:8px; margin-bottom:14px;">
@@ -2883,6 +2916,10 @@ function renderAttendanceTab(empNo, selectedYear) {
   }
 
   if (isAdmin) {
+    // 잔여 조정 단축 버튼 (현재 연도 기준)
+    const adjBtn = $("#detailAdjust");
+    if (adjBtn) adjBtn.addEventListener("click", () => { closeModal(); openAdjustBalanceModal(empNo); });
+
     // 유형이 '기타'면 비고 필수 표시 ON
     const updateNoteRequiredUi = () => {
       const isEtc = $("#attType").value === "etc";
