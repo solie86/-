@@ -2714,13 +2714,23 @@ function openEmployeeDetailModal(empNo, initialTab) {
   renderTab(tab);
 }
 
-function renderEmployeeInfoTab(empNo) {
+function renderEmployeeInfoTab(empNo, selectedYear) {
   const emp = Store.getEmployee(empNo);
   const cur = currentUser();
   const isAdmin = cur && cur.role === "admin";
 
   const row = (lbl, val) => `<div class="info-row"><div class="lbl">${lbl}</div><div class="val">${val}</div></div>`;
-  const year = today().getFullYear();
+  const thisYear = today().getFullYear();
+  const year = selectedYear || thisYear;
+  // 입사년부터 올해까지 (퇴사자는 퇴사년까지)
+  const hireYear = emp.hireDate ? parseLocalDate(emp.hireDate).getFullYear() : thisYear;
+  const lastYear = emp.terminationDate ? parseLocalDate(emp.terminationDate).getFullYear() : thisYear;
+  const yearList = [];
+  for (let y = lastYear; y >= hireYear; y--) yearList.push(y);
+  const yearOptionsHtml = yearList.map(y => {
+    const tag = y === thisYear ? " (올해)" : "";
+    return `<option value="${y}" ${y === year ? "selected" : ""}>${y}년${tag}</option>`;
+  }).join("");
   const bal = calcBalance(emp, year);
   const approved = Store.getRequestsByEmp(empNo)
     .filter(r => r.status === "approved")
@@ -2730,7 +2740,7 @@ function renderEmployeeInfoTab(empNo) {
   const formatHalf = (r) => r.days === 0.5 ? (r.halfDayPart === "PM" ? "오후반차" : "오전반차") : "연차";
   const shortDate = (s) => s ? s.slice(5).replace("-", "/") : "";
   const usedListHtml = approved.length === 0
-    ? `<div style="font-size:12px; color:var(--gray-500); padding:8px 0;">올해 사용 내역이 없습니다.</div>`
+    ? `<div style="font-size:12px; color:var(--gray-500); padding:8px 0;">${year === thisYear ? "올해" : year + "년"} 사용 내역이 없습니다.</div>`
     : `<div style="display:flex; flex-wrap:wrap; gap:6px;">${
         approved.map(r => {
           const cls = r.days === 0.5 ? "approved-half" : "approved";
@@ -2740,8 +2750,11 @@ function renderEmployeeInfoTab(empNo) {
       }</div>`;
 
   $("#empDetailContent").innerHTML = `
+    <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+      <select id="empInfoYear" class="btn ghost sm" style="padding:4px 10px;">${yearOptionsHtml}</select>
+    </div>
     <div class="grid-3" style="margin-bottom:14px;">
-      <div class="stat-card"><div class="label">부여 (${year})</div><div class="value">${bal.granted}<span class="unit">일</span></div>
+      <div class="stat-card"><div class="label">부여 (${year}년)</div><div class="value">${bal.granted}<span class="unit">일</span></div>
         <div style="font-size:11px; color:var(--gray-600); margin-top:4px;">입사일 ${emp.hireDate}${emp.birthDate ? ` · 생일 ${emp.birthDate.slice(5)}` : ''}</div>
       </div>
       <div class="stat-card yellow"><div class="label">사용</div><div class="value">${bal.used}<span class="unit">일</span></div>
@@ -2753,7 +2766,7 @@ function renderEmployeeInfoTab(empNo) {
       </div>
     </div>
 
-    <div style="font-size:13px; font-weight:600; color:var(--gray-700); margin:6px 0;">올해 사용 내역</div>
+    <div style="font-size:13px; font-weight:600; color:var(--gray-700); margin:6px 0;">${year === thisYear ? "올해" : year + "년"} 사용 내역</div>
     ${usedListHtml}
 
     <div style="border-top:1px solid var(--gray-200); margin:14px 0;"></div>
@@ -2786,6 +2799,13 @@ function renderEmployeeInfoTab(empNo) {
              ※ [퇴사 처리]는 직원을 퇴사자로 옮길 뿐 데이터는 보존됩니다. 비밀번호는 SHA-256 해시 저장이라 평문 확인 불가 — 잊었을 때만 [재설정].
            </p>`}` : ""}
   `;
+
+  const yearSel = $("#empInfoYear");
+  if (yearSel) {
+    yearSel.addEventListener("change", (e) => {
+      renderEmployeeInfoTab(empNo, Number(e.target.value));
+    });
+  }
 
   if (isAdmin) {
     $("#infoEdit").addEventListener("click", () => { closeModal(); openEditEmployeeModal(empNo); });
