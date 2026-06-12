@@ -2714,63 +2714,14 @@ function openEmployeeDetailModal(empNo, initialTab) {
   renderTab(tab);
 }
 
-function renderEmployeeInfoTab(empNo, selectedYear) {
+function renderEmployeeInfoTab(empNo) {
   const emp = Store.getEmployee(empNo);
   const cur = currentUser();
   const isAdmin = cur && cur.role === "admin";
 
   const row = (lbl, val) => `<div class="info-row"><div class="lbl">${lbl}</div><div class="val">${val}</div></div>`;
-  const thisYear = today().getFullYear();
-  const year = selectedYear || thisYear;
-  // 입사년부터 올해까지 (퇴사자는 퇴사년까지)
-  const hireYear = emp.hireDate ? parseLocalDate(emp.hireDate).getFullYear() : thisYear;
-  const lastYear = emp.terminationDate ? parseLocalDate(emp.terminationDate).getFullYear() : thisYear;
-  const yearList = [];
-  for (let y = lastYear; y >= hireYear; y--) yearList.push(y);
-  const yearOptionsHtml = yearList.map(y => {
-    const tag = y === thisYear ? " (올해)" : "";
-    return `<option value="${y}" ${y === year ? "selected" : ""}>${y}년${tag}</option>`;
-  }).join("");
-  const bal = calcBalance(emp, year);
-  const approved = Store.getRequestsByEmp(empNo)
-    .filter(r => r.status === "approved")
-    .filter(r => parseLocalDate(r.startDate).getFullYear() === year)
-    .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
-
-  const formatHalf = (r) => r.days === 0.5 ? (r.halfDayPart === "PM" ? "오후반차" : "오전반차") : "연차";
-  const shortDate = (s) => s ? s.slice(5).replace("-", "/") : "";
-  const usedListHtml = approved.length === 0
-    ? `<div style="font-size:12px; color:var(--gray-500); padding:8px 0;">${year === thisYear ? "올해" : year + "년"} 사용 내역이 없습니다.</div>`
-    : `<div style="display:flex; flex-wrap:wrap; gap:6px;">${
-        approved.map(r => {
-          const cls = r.days === 0.5 ? "approved-half" : "approved";
-          const range = r.startDate === r.endDate ? shortDate(r.startDate) : `${shortDate(r.startDate)}~${shortDate(r.endDate)}`;
-          return `<span class="cal-evt ${cls}" style="display:inline-block; padding:4px 8px; border-radius:6px;" title="${escapeHtml(r.reason || '')}">${range} · ${formatHalf(r)}${r.days !== 0.5 && Number(r.days) !== 1 ? ` (${r.days}일)` : ''}</span>`;
-        }).join("")
-      }</div>`;
 
   $("#empDetailContent").innerHTML = `
-    <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
-      <select id="empInfoYear" class="btn ghost sm" style="padding:4px 10px;">${yearOptionsHtml}</select>
-    </div>
-    <div class="grid-3" style="margin-bottom:14px;">
-      <div class="stat-card"><div class="label">부여 (${year}년)</div><div class="value">${bal.granted}<span class="unit">일</span></div>
-        <div style="font-size:11px; color:var(--gray-600); margin-top:4px;">입사일 ${emp.hireDate}${emp.birthDate ? ` · 생일 ${emp.birthDate.slice(5)}` : ''}</div>
-      </div>
-      <div class="stat-card yellow"><div class="label">사용</div><div class="value">${bal.used}<span class="unit">일</span></div>
-        <div style="font-size:11px; color:var(--gray-600); margin-top:4px;">승인 ${approved.length}건</div>
-      </div>
-      <div class="stat-card ${bal.remaining < 0 ? 'red' : 'green'}">
-        <div class="label">잔여${bal.remaining < 0 ? ` <span style="font-size:11px;background:#fee;color:#c00;padding:1px 6px;border-radius:8px;">당겨쓰기</span>` : ``}</div>
-        <div class="value">${bal.remaining}<span class="unit">일</span></div>
-      </div>
-    </div>
-
-    <div style="font-size:13px; font-weight:600; color:var(--gray-700); margin:6px 0;">${year === thisYear ? "올해" : year + "년"} 사용 내역</div>
-    ${usedListHtml}
-
-    <div style="border-top:1px solid var(--gray-200); margin:14px 0;"></div>
-
     <div>
       ${row("이름", escapeHtml(emp.name))}
       ${row("아이디", escapeHtml(emp.empNo))}
@@ -2790,22 +2741,8 @@ function renderEmployeeInfoTab(empNo, selectedYear) {
           ? `<button class="btn ghost sm" id="infoReinstate" style="color:var(--green-600);">재직 복귀</button>
              <button class="btn ghost sm" id="infoHardDelete" style="color:var(--red-500);">영구 삭제</button>`
           : `<button class="btn ghost sm" id="infoDelete" style="color:var(--red-500);">퇴사 처리</button>`}
-      </div>
-      ${emp.terminationDate
-        ? `<p style="font-size:11px; color:var(--gray-500); margin-top:8px;">
-             ※ 퇴사일 ${escapeHtml(emp.terminationDate)} · 데이터는 보존 중. [재직 복귀]로 되돌릴 수 있고, [영구 삭제]는 신청 내역까지 함께 삭제됩니다.
-           </p>`
-        : `<p style="font-size:11px; color:var(--gray-500); margin-top:8px;">
-             ※ [퇴사 처리]는 직원을 퇴사자로 옮길 뿐 데이터는 보존됩니다. 비밀번호는 SHA-256 해시 저장이라 평문 확인 불가 — 잊었을 때만 [재설정].
-           </p>`}` : ""}
+      </div>` : ""}
   `;
-
-  const yearSel = $("#empInfoYear");
-  if (yearSel) {
-    yearSel.addEventListener("change", (e) => {
-      renderEmployeeInfoTab(empNo, Number(e.target.value));
-    });
-  }
 
   if (isAdmin) {
     $("#infoEdit").addEventListener("click", () => { closeModal(); openEditEmployeeModal(empNo); });
@@ -2833,47 +2770,54 @@ function eventTypeEmoji(t) {
   return t === "workshop" ? "🏕️" : t === "dinner" ? "🍺" : t === "etc" ? "🎉" : "📌";
 }
 
-function renderAttendanceTab(empNo) {
+function renderAttendanceTab(empNo, selectedYear) {
   const cur = currentUser();
   const isAdmin = cur && cur.role === "admin";
   const emp = Store.getEmployee(empNo);
-  const bal = calcBalance(emp);
-  const year = today().getFullYear();
+  const thisYear = today().getFullYear();
+  const year = selectedYear || thisYear;
+
+  // 연도 셀렉터 옵션 (입사년 ~ 올해/퇴사년)
+  const hireYear = emp.hireDate ? parseLocalDate(emp.hireDate).getFullYear() : thisYear;
+  const lastYear = emp.terminationDate ? parseLocalDate(emp.terminationDate).getFullYear() : thisYear;
+  const yearList = [];
+  for (let y = lastYear; y >= hireYear; y--) yearList.push(y);
+  const yearOptionsHtml = yearList.map(y => {
+    const tag = y === thisYear ? " (올해)" : "";
+    return `<option value="${y}" ${y === year ? "selected" : ""}>${y}년${tag}</option>`;
+  }).join("");
+
+  // 그 해 사용한 연차 신청 (승인된 것)
+  const approved = Store.getRequestsByEmp(empNo)
+    .filter(r => r.status === "approved")
+    .filter(r => parseLocalDate(r.startDate).getFullYear() === year)
+    .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
+  const formatHalf = (r) => r.days === 0.5 ? (r.halfDayPart === "PM" ? "오후반차" : "오전반차") : "연차";
+  const shortDate = (s) => s ? s.slice(5).replace("-", "/") : "";
+  const usedListHtml = approved.length === 0
+    ? `<div style="font-size:12px; color:var(--gray-500); padding:8px 0;">${year === thisYear ? "올해" : year + "년"} 사용 내역이 없습니다.</div>`
+    : `<div style="display:flex; flex-wrap:wrap; gap:6px;">${
+        approved.map(r => {
+          const cls = r.days === 0.5 ? "approved-half" : "approved";
+          const range = r.startDate === r.endDate ? shortDate(r.startDate) : `${shortDate(r.startDate)}~${shortDate(r.endDate)}`;
+          return `<span class="cal-evt ${cls}" style="display:inline-block; padding:4px 8px; border-radius:6px;" title="${escapeHtml(r.reason || '')}">${range} · ${formatHalf(r)}${r.days !== 0.5 && Number(r.days) !== 1 ? ` (${r.days}일)` : ''}</span>`;
+        }).join("")
+      }</div>`;
+
+  // 근태 기록 (그 해 분만)
   const records = Store.getAttendanceByEmp(empNo)
     .slice()
+    .filter(r => parseLocalDate(r.recordDate).getFullYear() === year)
     .sort((a, b) => (a.recordDate < b.recordDate ? 1 : -1));
 
-  const counts = {
-    late:   records.filter((r) => r.recordType === "late").length,
-    absent: records.filter((r) => r.recordType === "absent").length,
-    sick:   records.filter((r) => r.recordType === "sick").length,
-  };
-
   $("#empDetailContent").innerHTML = `
-    <div class="grid-3" style="margin-bottom:14px;">
-      <div class="stat-card yellow">
-        <div class="label">사용 연차</div>
-        <div class="value">${bal.used}<span class="unit">일</span></div>
-        <div style="font-size:11px; color:var(--gray-600); margin-top:4px;">올해 부여 ${bal.granted}일${bal.adjustment ? ` (조정 ${bal.adjustment >= 0 ? "+" : ""}${bal.adjustment})` : ""}</div>
-      </div>
-      <div class="stat-card ${bal.remaining < 0 ? 'red' : 'green'}">
-        <div class="label">잔여 연차${bal.remaining < 0 ? ` <span style="font-size:11px;background:#fee;color:#c00;padding:1px 6px;border-radius:8px;">당겨쓰기</span>` : ``}</div>
-        <div class="value">${bal.remaining}<span class="unit">일</span></div>
-      </div>
-      <div class="stat-card">
-        <div class="label">그 외</div>
-        <div style="display:flex; gap:14px; margin-top:6px; flex-wrap:wrap;">
-          <div><span style="font-weight:700; font-size:18px; color:#8a6a14;">${counts.late}</span><span style="font-size:11px; color:var(--gray-600); margin-left:4px;">지각</span></div>
-          <div><span style="font-weight:700; font-size:18px; color:#a73838;">${counts.absent}</span><span style="font-size:11px; color:var(--gray-600); margin-left:4px;">결근</span></div>
-          <div><span style="font-weight:700; font-size:18px; color:var(--navy-700);">${counts.sick}</span><span style="font-size:11px; color:var(--gray-600); margin-left:4px;">병가</span></div>
-        </div>
-      </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <div style="font-size:13px; font-weight:600; color:var(--gray-700);">${year === thisYear ? "올해" : year + "년"} 사용 내역</div>
+      <select id="attYear" class="btn ghost sm" style="padding:4px 10px;">${yearOptionsHtml}</select>
     </div>
+    ${usedListHtml}
 
-    ${isAdmin ? `
-      <div style="display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;">
-        <button class="btn ghost sm" id="detailAdjust">잔여 조정</button>
-      </div>` : ""}
+    <div style="border-top:1px solid var(--gray-200); margin:14px 0;"></div>
 
     ${isAdmin ? `
       <form id="addAttForm" style="background:var(--gray-50); padding:14px; border-radius:8px; margin-bottom:14px;">
@@ -2930,10 +2874,15 @@ function renderAttendanceTab(empNo) {
     </div>
   `;
 
-  if (isAdmin) {
-    // 잔여 조정 단축 버튼
-    $("#detailAdjust").addEventListener("click", () => { closeModal(); openAdjustBalanceModal(empNo); });
+  // 연도 셀렉터
+  const yearSel = $("#attYear");
+  if (yearSel) {
+    yearSel.addEventListener("change", (e) => {
+      renderAttendanceTab(empNo, Number(e.target.value));
+    });
+  }
 
+  if (isAdmin) {
     // 유형이 '기타'면 비고 필수 표시 ON
     const updateNoteRequiredUi = () => {
       const isEtc = $("#attType").value === "etc";
@@ -2960,7 +2909,7 @@ function renderAttendanceTab(empNo) {
           note: note || null,
         });
         // 탭만 다시 그리기 (모달은 유지)
-        renderAttendanceTab(empNo);
+        renderAttendanceTab(empNo, year);
       } catch (err) {
         alert("추가 실패: " + (err.message || err));
         btn.disabled = false;
@@ -2973,7 +2922,7 @@ function renderAttendanceTab(empNo) {
         btn.disabled = true;
         try {
           await Store.deleteAttendance(btn.dataset.delAtt);
-          renderAttendanceTab(empNo);
+          renderAttendanceTab(empNo, year);
         } catch (err) {
           alert("삭제 실패: " + (err.message || err));
           btn.disabled = false;
