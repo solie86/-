@@ -2728,12 +2728,13 @@ function renderEmployeeInfoTab(empNo) {
     .sort((a, b) => (a.startDate || "").localeCompare(b.startDate || ""));
 
   const formatHalf = (r) => r.days === 0.5 ? (r.halfDayPart === "PM" ? "오후반차" : "오전반차") : "연차";
+  const shortDate = (s) => s ? s.slice(5).replace("-", "/") : "";
   const usedListHtml = approved.length === 0
     ? `<div style="font-size:12px; color:var(--gray-500); padding:8px 0;">올해 사용 내역이 없습니다.</div>`
     : `<div style="display:flex; flex-wrap:wrap; gap:6px;">${
         approved.map(r => {
           const cls = r.days === 0.5 ? "approved-half" : "approved";
-          const range = r.startDate === r.endDate ? r.startDate : `${r.startDate}~${r.endDate}`;
+          const range = r.startDate === r.endDate ? shortDate(r.startDate) : `${shortDate(r.startDate)}~${shortDate(r.endDate)}`;
           return `<span class="cal-evt ${cls}" style="display:inline-block; padding:4px 8px; border-radius:6px;" title="${escapeHtml(r.reason || '')}">${range} · ${formatHalf(r)}${r.days !== 0.5 && Number(r.days) !== 1 ? ` (${r.days}일)` : ''}</span>`;
         }).join("")
       }</div>`;
@@ -2752,7 +2753,7 @@ function renderEmployeeInfoTab(empNo) {
       </div>
     </div>
 
-    <div style="font-size:13px; font-weight:600; color:var(--gray-700); margin:6px 0;">${year}년 사용 내역</div>
+    <div style="font-size:13px; font-weight:600; color:var(--gray-700); margin:6px 0;">올해 사용 내역</div>
     ${usedListHtml}
 
     <div style="border-top:1px solid var(--gray-200); margin:14px 0;"></div>
